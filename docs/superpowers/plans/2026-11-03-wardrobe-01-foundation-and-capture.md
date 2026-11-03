@@ -821,7 +821,7 @@ so it comes before the first screen rather than alongside it.
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: four theme palettes as CSS custom property sets on `[data-theme="khadi"|"tissue"|"chalk"|"indigo"]`, each defining `--ground --surface --ink --dim --line --accent --accent-ink --cut`; `THEMES` from `src/styles/themes.ts` as `Record<ThemeName, Record<TokenName, string>>` — the same values the CSS uses, exported so a test can assert on them; `type ThemeName = 'khadi' | 'tissue' | 'chalk' | 'indigo' | 'system'`; `useTheme(): { theme: ThemeName; setTheme(t: ThemeName): void }`; `contrastRatio(a: string, b: string): number`.
+- Produces: four theme palettes as CSS custom property sets on `[data-theme="khadi"|"tissue"|"chalk"|"indigo"]`, each defining `--ground --surface --ink --dim --line --accent --accent-ink --cut`; `THEMES` from `src/styles/themes.ts` as `Record<ThemeName, Record<TokenName, string>>` — the same values the CSS uses, exported so a test can assert on them; `type ThemeName = 'khadi' | 'tissue' | 'chalk' | 'indigo' | 'system'`; `useTheme(): { theme: ThemeName; setTheme(t: ThemeName): void }`; `contrastRatio(a: string, b: string): number`; `HitArea({ children, as }: { children: ReactNode; as?: ElementType }): JSX.Element` — wraps a small control and guarantees at least 44x44 of tappable area without changing its drawn size. Every chip, tab and switch in plans 2, 3 and 4 uses it.
 
 - [ ] **Step 1: Write the failing contrast test**
 
@@ -1177,6 +1177,25 @@ Seed 1,000 items, then on a throttled phone-profile connection record: cold and 
 git add -A
 git commit -m "chore: deploy, seed script, and recorded launch-gate measurements"
 ```
+
+---
+
+## Requirement coverage
+
+Every requirement in this plan's scope, and the task that serves it. A requirement with no
+task here is named in Scope above as deferred or reduced.
+
+| Req | Task | Req | Task |
+|---|---|---|---|
+| FR-1.1 open signup | 6 | FR-2.1 one photo | 16 |
+| FR-1.2 verify before upload | 6, 10 | FR-2.2 photo alone is valid | 10 |
+| FR-1.3 sign in, out, reset | 7 | FR-2.3 bulk session | 16 |
+| FR-1.4 privacy statement | 6 | FR-2.4 several photos | *plan 2* |
+| FR-1.5 one wardrobe | 10 (schema) | FR-2.5 derived name | 13 (reduced) |
+| FR-1.6 private to owner | 12, 13 | FR-12.1 all on a phone | 15, 16 |
+| FR-1.7 delete account | 17 | FR-12.2 camera directly | 16 |
+| | | FR-12.3 session persists | 3 |
+| | | FR-12.4 any device | 8, 12 |
 
 ---
 
