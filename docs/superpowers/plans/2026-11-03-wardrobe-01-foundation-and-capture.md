@@ -9,6 +9,7 @@
 **Tech Stack:** TypeScript (strict), Next.js 15 (App Router), React 19, Postgres 16, Drizzle ORM + drizzle-kit, pg-boss (Postgres-backed job queue — no Redis), sharp + heic-convert, `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` (S3-compatible; MinIO locally), `@node-rs/argon2`, zod, Resend (mail), Vitest, Docker Compose for Postgres + MinIO in dev and test.
 
 **Spec:** [docs/superpowers/specs/2026-11-03-digital-wardrobe-design.md](../specs/2026-11-03-digital-wardrobe-design.md)
+**UI design:** [docs/superpowers/specs/2026-11-04-wardrobe-ui-design.md](../specs/2026-11-04-wardrobe-ui-design.md) — the palettes, type roles, geometry and every screen this plan builds. Task 14 lands the token system; every UI task after it draws from there.
 
 **Scope:** Spec sections 6.1, 6.2, 6.12, and the parts of section 7 those need. Deliberately **not** here: tag types and tags (6.5), filtering and search (6.7), item editing/archiving (6.8), provider credentials (6.3), normalisation (6.4), autofill (6.6), outfits (6.9–6.11). Those are plans 2–4.
 
@@ -809,58 +810,206 @@ git commit -m "feat: per-account caps and the paginated items api"
 
 ---
 
-### Task 14: Wardrobe grid
+### Task 14: Design system and theme
+
+Lands the token system from the UI design doc. Every UI task after this one draws from it,
+so it comes before the first screen rather than alongside it.
 
 **Files:**
-- Create: `src/app/(app)/wardrobe/page.tsx`, `src/components/ItemGrid.tsx`, `src/components/ItemTile.tsx`, `src/components/EmptyWardrobe.tsx`, `src/hooks/useItems.ts`, `src/app/globals.css`
-- Test: `tests/components/ItemGrid.test.tsx`
+- Create: `src/styles/tokens.css`, `src/styles/base.css`, `src/app/globals.css`, `src/components/ThemeProvider.tsx`, `src/components/HitArea.tsx`
+- Test: `tests/styles/contrast.test.ts`, `tests/components/ThemeProvider.test.tsx`
 
 **Interfaces:**
-- Consumes: `GET /api/items`, `ItemSummary`.
-- Produces: `useItems(): { items: ItemSummary[]; total: number; loadMore: () => void; hasMore: boolean; state: 'loading' | 'ready' | 'error' }`.
+- Consumes: nothing.
+- Produces: four theme palettes as CSS custom property sets on `[data-theme="khadi"|"tissue"|"chalk"|"indigo"]`, each defining `--ground --surface --ink --dim --line --accent --accent-ink --cut`; `THEMES` from `src/styles/themes.ts` as `Record<ThemeName, Record<TokenName, string>>` — the same values the CSS uses, exported so a test can assert on them; `type ThemeName = 'khadi' | 'tissue' | 'chalk' | 'indigo' | 'system'`; `useTheme(): { theme: ThemeName; setTheme(t: ThemeName): void }`; `contrastRatio(a: string, b: string): number`.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing contrast test**
 
-Vitest with Testing Library against a mocked fetch.
+This is NFR-8.1's standing guarantee, not a one-off check. It must fail if any palette
+regresses.
 
 ```ts
-it("renders a tile per item", async () => { expect(screen.getAllByRole("img")).toHaveLength(3); });
-it("shows the empty state for a new wardrobe", async () => { expect(screen.getByText(/add your first/i)).toBeVisible(); });
-it("shows the item count", async () => { expect(screen.getByText(/14 items/i)).toBeVisible(); }); // FR-7.7
-it("shows a processing indicator on a pending item", async () => { expect(screen.getByLabelText(/still processing/i)).toBeVisible(); });
-it("gives every image alt text from the item name", async () => { expect(img).toHaveAttribute("alt", expect.stringContaining("Beige overshirt")); }); // NFR-8.3
-it("loads the next page when loadMore is called", async () => { ... });
-it("shows a plain-language message and a retry on fetch failure", async () => { expect(screen.getByText(/couldn.t load/i)).toBeVisible(); }); // NFR-5.8
+// tests/styles/contrast.test.ts
+const BODY = 4.5, LARGE = 3.0;
+const PAIRS: [keyof Tokens, keyof Tokens, number][] = [
+  ["ink","ground",BODY], ["ink","surface",BODY],
+  ["dim","ground",BODY], ["dim","surface",BODY],
+  ["accent","ground",LARGE], ["accent","surface",LARGE],
+  ["accentInk","accent",BODY], ["ink","cut",BODY],
+];
+describe.each(Object.keys(THEMES))("%s", (name) => {
+  it.each(PAIRS)("%s on %s meets %s:1", (fg, bg, need) => {
+    expect(contrastRatio(THEMES[name][fg], THEMES[name][bg])).toBeGreaterThanOrEqual(need);
+  });
+});
+it("every theme defines every token", () => { ... });
 ```
+
+Expected values, from the design doc's measured table — the two light themes sit closest to
+the line, which is why they were corrected: `dim` on `ground` is 4.57 for Khadi and 4.52 for
+Tissue.
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `npx vitest run tests/components/ItemGrid.test.tsx`
+Run: `npx vitest run tests/styles/contrast.test.ts`
+Expected: FAIL — `THEMES` not found.
+
+- [ ] **Step 3: Implement `contrastRatio` and `THEMES` in `src/styles/themes.ts`**
+
+`contrastRatio` is the WCAG 2.1 relative-luminance formula. The four palettes, verbatim from
+the UI design doc §2.1:
+
+| Token | khadi | tissue | chalk | indigo |
+|---|---|---|---|---|
+| `ground` | `#E4E0D2` | `#EBE6E3` | `#1C1D1A` | `#141C2B` |
+| `surface` | `#F2EFE6` | `#F7F4F2` | `#262823` | `#1D2739` |
+| `ink` | `#2A2A24` | `#23201F` | `#EDEAE3` | `#E6EAF2` |
+| `dim` | `#666355` | `#6F6662` | `#9A9A90` | `#8694AB` |
+| `line` | `#CFCABA` | `#D8D1CD` | `#3A3D35` | `#2E3B53` |
+| `accent` | `#35603F` | `#2C4A7C` | `#7FB2C7` | `#C9A227` |
+| `accentInk` | `#F2EFE6` | `#FFFFFF` | `#13201F` | `#141C2B` |
+| `cut` | `#D6D1BF` | `#DED7D3` | `#2E302A` | `#223047` |
+
+- [ ] **Step 4: Generate `src/styles/tokens.css` from `THEMES`**
+
+One `[data-theme="…"]` block per theme, so CSS and the tested values cannot drift. Generate
+it in a build step or assert equality in the test — do not hand-maintain two copies.
+
+- [ ] **Step 5: Write the failing theme-selection test**
+
+```ts
+// tests/components/ThemeProvider.test.tsx
+it("defaults to system", () => { expect(result.current.theme).toBe("system"); });
+it("system with a light device preference resolves to khadi", async () => {
+  matchMedia("(prefers-color-scheme: dark)", false);
+  expect(document.documentElement.dataset.theme).toBe("khadi");
+});
+it("system with a dark device preference resolves to chalk", async () => { ... });
+it("a pinned theme wins over the device preference", async () => {
+  act(() => result.current.setTheme("tissue"));
+  matchMedia("(prefers-color-scheme: dark)", true);
+  expect(document.documentElement.dataset.theme).toBe("tissue");
+});
+it("remembers a pinned theme across a reload", async () => { ... });
+it("follows a device preference that changes while open", async () => { ... });
+```
+
+- [ ] **Step 6: Implement `ThemeProvider` and `useTheme`**
+
+NFR-8.5's pairing: `system` maps to **khadi** when the device is light and **chalk** when it
+is dark; tissue pairs with indigo for a user who pins neither. `system` is the default, and
+its user-facing label is **"Match my device"** — the settings screen shows five options, not
+four themes plus a toggle. The
+resolved name is written to `document.documentElement.dataset.theme`; a pinned choice
+persists in `localStorage` and is read before first paint to avoid a flash of the wrong
+theme.
+
+- [ ] **Step 7: Implement `base.css` — type, scale, geometry**
+
+From the design doc §2.2 and §2.3. Load **Archivo** (400/500/600), **Bricolage Grotesque**
+(600/800) and **Spline Sans Mono** (400) from Google Fonts with real fallback stacks.
+Bricolage is for screen titles and band names only; Spline Sans Mono for masked secrets and
+measurements only. Radius by role: `2px` swatch chips, `3px` panels and buttons, `999px`
+filter chips. Page gutter `14px`, grid gutter `7px`.
+
+- [ ] **Step 8: Implement `HitArea.tsx`**
+
+NFR-8.2 says visual size and hit area are decoupled, and that this is a property of the
+shared components. `HitArea` wraps a small control and guarantees at least 44x44 of
+tappable area via padding or a `::before` overlay without changing the drawn size. Chips,
+tabs and switches use it; nothing re-implements it.
+
+- [ ] **Step 9: Run both test files to verify they pass**
+
+Run: `npm test -- tests/styles/contrast.test.ts tests/components/ThemeProvider.test.tsx`
+Expected: PASS — 32 contrast assertions (4 themes x 8 pairs) plus 7 theme tests.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add -A
+git commit -m "feat: four-theme token system with asserted contrast and paired system theme"
+```
+
+---
+
+### Task 15: Wardrobe grid
+
+**Files:**
+- Create: `src/app/(app)/wardrobe/page.tsx`, `src/components/ItemGrid.tsx`, `src/components/ItemTile.tsx`, `src/components/EmptyWardrobe.tsx`, `src/components/LoadFailed.tsx`, `src/hooks/useItems.ts`, `src/lib/alt-text.ts`
+- Test: `tests/components/ItemGrid.test.tsx`, `tests/lib/alt-text.test.ts`
+
+**Interfaces:**
+- Consumes: `GET /api/items`, `ItemSummary`, the tokens and `HitArea` from Task 14.
+- Produces: `useItems(): { items: ItemSummary[]; total: number; loadMore: () => void; hasMore: boolean; state: 'loading' | 'ready' | 'error' }`; `altTextFor(item: ItemSummary): string`.
+
+- [ ] **Step 1: Write the failing tests**
+
+```ts
+// ItemGrid.test.tsx
+it("renders a tile per item", async () => { expect(screen.getAllByRole("img")).toHaveLength(3); });
+it("shows the item count", async () => { expect(screen.getByText(/14 pieces/i)).toBeVisible(); }); // FR-7.7
+it("shows a processing indicator on a pending item", async () => { expect(screen.getByLabelText(/still processing/i)).toBeVisible(); });
+it("loads the next page when loadMore is called", async () => { ... });
+it("renders tiles at a fixed 3:4 ratio so lazy images reserve space", async () => {
+  expect(getComputedStyle(tile).aspectRatio).toBe("3 / 4");
+}); // NFR-2.6
+// Plan 1 shows opaque photos, so this ground is invisible today. It is asserted now so
+// plan 3 can drop transparent cutouts onto it without touching the grid (FR-4.1 as amended).
+it("gives every tile plate the theme's cutout ground", async () => {
+  expect(getComputedStyle(plate).backgroundColor).toBe(rgb(THEMES.khadi.cut));
+});
+// the empty state is an instruction, not a blank — UI design doc, Accounts group
+it("empty wardrobe invites the first photo and says tagging can wait", async () => {
+  expect(screen.getByText(/nothing in here yet/i)).toBeVisible();
+  expect(screen.getByText(/tag it later, or never/i)).toBeVisible();
+});
+it("shows a plain-language message and a retry on fetch failure", async () => {
+  expect(screen.getByText(/could not reach your wardrobe/i)).toBeVisible();
+  expect(screen.getByRole("button", { name: /try again/i })).toBeVisible();
+}); // NFR-5.8
+
+// alt-text.test.ts — NFR-8.3's formula
+it("uses the name when set", () => { expect(altTextFor({ name: "Linen shirt", ... })).toBe("Linen shirt"); });
+it("falls back to the derived name", () => { ... });
+it("appends category and colour when present", () => { ... }); // plan 2 supplies tags; assert the shape now
+```
+
+- [ ] **Step 2: Run them to verify they fail**
+
+Run: `npx vitest run tests/components/ItemGrid.test.tsx tests/lib/alt-text.test.ts`
 Expected: FAIL — modules not found.
 
-- [ ] **Step 3: Implement `useItems`, the three components, and the page**
+- [ ] **Step 3: Implement `altTextFor` in `src/lib/alt-text.ts`**
 
-Three-column grid on phone widths, more on wider screens, 3:4 tiles. Images `loading="lazy"` with explicit width and height to avoid layout shift, which is NFR-2.6's progressive loading. The page is a client component reading the API (NFR-1.4), not a server-rendered list.
+Name if set, else derived name, then Category and Colour tags when they exist. Tags arrive
+in plan 2; the function takes them as optional now so plan 2 adds data, not a signature
+change.
 
-- [ ] **Step 4: Define the theme tokens in `globals.css`**
+- [ ] **Step 4: Implement `useItems`, the four components, and the page**
 
-Light and dark palettes via `prefers-color-scheme`, both meeting AA contrast (NFR-8.1, NFR-8.5). A minimum 44px hit area on every interactive element (NFR-8.2).
+Three columns at phone widths, more on wider screens, `3:4` tiles with explicit dimensions
+(NFR-2.6). Each tile's plate takes its background from `var(--cut)`. Plan 1's photos are
+opaque so it does not show yet — it is there so plan 3's transparent cutouts composite onto
+the theme rather than onto a baked grey (FR-4.1). A client component reading the API (NFR-1.4), not a
+server-rendered list. `EmptyWardrobe` and `LoadFailed` use the copy from the UI design doc
+rather than invented wording; the empty state is the first screen every account ever sees.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `npm test -- tests/components/ItemGrid.test.tsx`
-Expected: PASS, 7 tests.
+Run: `npm test -- tests/components/ItemGrid.test.tsx tests/lib/alt-text.test.ts`
+Expected: PASS, 11 tests.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add -A
-git commit -m "feat: mobile-first wardrobe grid with empty and processing states"
+git commit -m "feat: wardrobe grid with themed cutout ground, empty and failure states"
 ```
 
 ---
 
-### Task 15: Capture and bulk upload
+### Task 16: Capture and bulk upload
 
 **Files:**
 - Create: `src/app/(app)/add/page.tsx`, `src/components/CaptureButton.tsx`, `src/components/UploadQueue.tsx`, `src/lib/client/upload-queue.ts`, `src/app/api/items/upload/route.ts`
@@ -925,7 +1074,7 @@ git commit -m "feat: camera capture and resumable bulk upload queue"
 
 ---
 
-### Task 16: Account deletion
+### Task 17: Account deletion
 
 **Files:**
 - Create: `src/features/accounts/delete.ts`, `src/app/api/account/route.ts`, `src/app/(app)/settings/page.tsx`
@@ -976,7 +1125,7 @@ git commit -m "feat: account deletion purging photos, rows, and sessions"
 
 ---
 
-### Task 17: Deploy and verify the launch gates
+### Task 18: Deploy and verify the launch gates
 
 **Files:**
 - Create: `README.md` (setup and deploy), `scripts/seed-perf.ts`, `docs/superpowers/plans/notes/01-launch-gates.md`
