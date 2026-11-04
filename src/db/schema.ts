@@ -1,5 +1,13 @@
 // Drizzle table definitions.
-import { customType, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  customType,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 /**
  * Postgres `citext` — a case-insensitive text type. Used for `email` so a
@@ -42,3 +50,22 @@ export const sessions = pgTable("sessions", {
     .notNull()
     .defaultNow(),
 });
+
+/**
+ * Fixed-window rate-limit counters (NFR-4.8). `key` identifies the action
+ * plus the thing being limited (e.g. `signin:a@b.com`, `signup:1.2.3.4`);
+ * `windowStart` is the start of the fixed window the count applies to. The
+ * composite primary key is what makes the increment in
+ * `src/lib/limits/rate-limit.ts` atomic: a single
+ * `insert ... on conflict (key, window_start) do update set count = count + 1`
+ * can only ever race with itself, not read-then-write in application code.
+ */
+export const rateLimits = pgTable(
+  "rate_limits",
+  {
+    key: text("key").notNull(),
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.key, table.windowStart] })],
+);
