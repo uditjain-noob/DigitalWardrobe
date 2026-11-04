@@ -850,7 +850,7 @@ outfit cover photo is the seam Phase 2 builds on.
 
 - ~~Language, framework, database, hosting provider, image storage mechanism, job runner,
   and transactional email provider.~~ **Decided 2026-11-04** — libraries in plan 1, and the
-  operated infrastructure in `2026-11-04-wardrobe-infrastructure.md`: Node 22 and Postgres 16
+  operated infrastructure in `2026-11-04-wardrobe-infrastructure.md`: Node 26 and Postgres 16
   in containers on one small VPS, Cloudflare R2 for objects, pg-boss on that Postgres, Resend
   for email. Every one of those is reachable only through an interface the plans define, so
   each remains swappable.

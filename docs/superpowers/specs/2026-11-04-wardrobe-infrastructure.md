@@ -45,13 +45,13 @@ dominate the hosting choice entirely: the box serves JSON only. See §7.1.
 
 ## 3. The decision
 
-**Three processes, one runtime, one database.** Node 22 LTS runs the web process and the
+**Three processes, one runtime, one database.** Node 26 LTS runs the web process and the
 worker; Postgres 16 holds everything including the job queue; objects live in an S3-compatible
 bucket. There is no Redis, no separate image service, no second language.
 
 | Component | Choice | Why this one |
 |---|---|---|
-| **Runtime** | Node 22 LTS, Node runtime (not Edge) | sharp and heic-convert are native; Node 22 has prebuilt sharp binaries and native `fetch`. Pinned in `.nvmrc` and the Dockerfile. **Build the image for `linux/arm64` as well as `amd64`** — the recommended host in §7.4 is ARM, and every dependency here ships ARM64 builds |
+| **Runtime** | **Node 26 LTS** ("Lithium"), Node runtime (not Edge) | Active LTS since 28 October 2026, security-supported to April 2029. sharp and heic-convert are native, and sharp builds against Node-API v9, which is ABI-stable — so a Node major upgrade needs no rebuild. Pinned in `.nvmrc` and the Dockerfile. **Build the image for `linux/arm64` as well as `amd64`** — the recommended host in §7.4 is ARM, and every dependency here ships ARM64 builds |
 | **Web** | Next.js 15, one container | Already chosen in plan 1 |
 | **Worker** | A second container running the same image with a different entrypoint | NFR-1.5. Same image means one build, and the worker can import `src/features/*` directly |
 | **Database** | **Postgres 16 in a container on the same host**, on a named volume | Always-on and local: pg-boss polls constantly and holds a connection, which is exactly what serverless Postgres with autosuspend is worst at. Zero latency to the app, zero cost, and the same `docker-compose` service as local dev |

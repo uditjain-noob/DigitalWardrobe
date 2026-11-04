@@ -6,10 +6,10 @@
 
 **Architecture:** One Next.js App Router repo in TypeScript, plus a second entry point that runs the same code as a background worker. Routes under `src/app/` are thin HTTP adapters; all behaviour lives in `src/features/*` (domain use cases, tested directly) and `src/lib/*` (infrastructure adapters behind interfaces: object storage, mail, image processing, job queue). Upload is split in two — the request stores the original and creates the item (NFR-2.3), and a pg-boss job renders the display and thumbnail versions afterwards. Photos are served from a stable per-version app URL that checks ownership and redirects to a short-lived signed storage URL (NFR-3.6), which is what keeps a later offline cache possible (NFR-1.4).
 
-**Tech Stack:** TypeScript (strict), Next.js 15 (App Router), React 19, Postgres 16, Drizzle ORM + drizzle-kit, pg-boss (Postgres-backed job queue — no Redis), sharp + heic-convert, `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` (S3-compatible; MinIO locally), `@node-rs/argon2`, zod, Resend (mail), Vitest, Docker Compose for Postgres + MinIO in dev and test.
+**Tech Stack:** TypeScript (strict), Node 26 LTS, Next.js 15 (App Router), React 19, Postgres 16, Drizzle ORM + drizzle-kit, pg-boss (Postgres-backed job queue — no Redis), sharp + heic-convert, `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` (S3-compatible; MinIO locally), `@node-rs/argon2`, zod, Resend (mail), Vitest, Docker Compose for Postgres + MinIO in dev and test.
 
 **Spec:** [docs/superpowers/specs/2026-11-03-digital-wardrobe-design.md](../specs/2026-11-03-digital-wardrobe-design.md)
-**Infrastructure:** [docs/superpowers/specs/2026-11-04-wardrobe-infrastructure.md](../specs/2026-11-04-wardrobe-infrastructure.md) — Node 22 and Postgres 16 in containers on one VPS, Cloudflare R2, pg-boss, Resend, Caddy. The dev compose file this plan builds is the one production runs.
+**Infrastructure:** [docs/superpowers/specs/2026-11-04-wardrobe-infrastructure.md](../specs/2026-11-04-wardrobe-infrastructure.md) — Node 26 and Postgres 16 in containers on one VPS, Cloudflare R2, pg-boss, Resend, Caddy. The dev compose file this plan builds is the one production runs.
 **UI design:** [docs/superpowers/specs/2026-11-04-wardrobe-ui-design.md](../specs/2026-11-04-wardrobe-ui-design.md) — the palettes, type roles, geometry and every screen this plan builds. Task 14 lands the token system; every UI task after it draws from there.
 
 **Scope:** Spec sections 6.1, 6.2, 6.12, and the parts of section 7 those need. Deliberately **not** here: tag types and tags (6.5), filtering and search (6.7), item editing/archiving (6.8), provider credentials (6.3), normalisation (6.4), autofill (6.6), outfits (6.9–6.11). Those are plans 2–4.
@@ -69,7 +69,7 @@ Input classes the spec implies that no obvious happy-path test would exercise. E
 
 - [ ] **Step 1: Scaffold the project**
 
-Next.js 15 App Router with TypeScript strict mode, React 19, Tailwind for styling. Add Drizzle, pg-boss, sharp, heic-convert, zod, `@node-rs/argon2`, the two AWS SDK packages, Vitest. Pin **Node 22 LTS** in `.nvmrc` and the Dockerfile — sharp and heic-convert are native, so every image path runs on the Node runtime, never Edge.
+Next.js 15 App Router with TypeScript strict mode, React 19, Tailwind for styling. Add Drizzle, pg-boss, sharp, heic-convert, zod, `@node-rs/argon2`, the two AWS SDK packages, Vitest. Pin **Node 26 LTS** in `.nvmrc` and the Dockerfile — Active LTS since 28 October 2026, supported to April 2029. sharp and heic-convert are native, so every image path runs on the Node runtime, never Edge; sharp builds against Node-API v9, which is ABI-stable, so this pin can move up a major without a rebuild.
 
 Build the image for **`linux/arm64` and `linux/amd64`**. The host recommended in the
 infrastructure doc §7.4 is ARM, and every native dependency here — sharp, argon2, Postgres —
