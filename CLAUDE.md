@@ -8,8 +8,8 @@ A mobile-first web app: a photographic record of everything you own to wear, so 
 answer questions about your own wardrobe when you are not standing in front of it. Personal
 project, one primary user, open signup.
 
-**Status: design complete, implementation not started.** As of 2026-11-04 every file in this
-repository is a document. There is no `src/`, no `package.json`.
+**Status: plan 1 in progress, subagent-driven.** Tasks 1-7 complete and reviewed; Task 8 in
+review. The app builds and the suite runs against a real Postgres and Garage.
 
 ## Document precedence
 
@@ -38,7 +38,7 @@ built by any plan.
 | Method | **subagent-driven** (`superpowers:subagent-driven-development`) — the user chose this |
 | Branch | `feat/plan-1-foundation`, branched from `design/wardrobe-phase-1` |
 | Ledger | `.superpowers/sdd/2026-11-03-wardrobe-01-foundation-and-capture/progress.md` |
-| Next | Task 1. Pre-flight scan and rulings are in the ledger; no task has been dispatched |
+| Next | see the ledger's last `Task <N>: complete` line — that is the truth, not this table |
 
 **After a compaction, trust the ledger and `git log` over your own recollection.** A task with
 a `Task <N>: complete` line is done — do not re-dispatch it. Re-dispatching completed task
@@ -115,7 +115,7 @@ docker compose up -d  # postgres + garage locally
 npx drizzle-kit generate && npx drizzle-kit migrate
 ```
 
-None of these exist yet — plan 1 Task 1 creates them.
+These exist as of Task 8. `npm test` brings up Postgres and Garage, migrates, then runs Vitest.
 
 ## Do not
 

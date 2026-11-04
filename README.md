@@ -14,9 +14,9 @@ Three moments drove the design:
 Plus one thing that follows: combinations that worked are worth keeping, so you can recall
 them instead of re-deriving them.
 
-> **Status: design complete, implementation not started.** Everything in this repository today
-> is a document — the spec, the UI design, the infrastructure decision, four implementation
-> plans and a provisioning runbook. There is no application code yet.
+> **Status: plan 1 in progress.** The design is complete — spec, UI design, infrastructure
+> decision, four implementation plans, a provisioning runbook. Implementation has started:
+> accounts, sessions, mail, rate limiting and object storage are built and reviewed.
 
 ---
 
@@ -91,8 +91,12 @@ has the options priced with sources.
 
 ## Building it
 
-Implementation follows the four plans in order, each task test-first with a review before the
-next begins. Plan 1 Task 1 creates the project; nothing exists before that.
+Implementation follows the four plans in order, each task test-first with a fresh review
+before the next begins.
+
+```bash
+npm test     # brings up Postgres and Garage, migrates, runs the suite
+```
 
 If you are an AI agent working here, read [CLAUDE.md](CLAUDE.md) first — it carries the
 document precedence, the current execution state, and the handful of rules that are expensive
