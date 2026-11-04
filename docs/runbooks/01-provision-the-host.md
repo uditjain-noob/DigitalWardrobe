@@ -95,7 +95,7 @@ correctly wired. Don't hand-build this.
 | Name | `wardrobe` |
 | Image | **Change image** → Canonical **Ubuntu 24.04** (or 26.04 LTS if offered) |
 | Shape | **Change shape** → **Ampere** → `VM.Standard.A1.Flex` |
-| OCPUs / memory | **1 OCPU, 6 GB** — see §9, this is deliberate |
+| OCPUs / memory | **1 OCPU, 4 GB** — see §10, this is deliberate and the arithmetic matters |
 | Subnet | the **public** subnet from the wizard |
 | Public IPv4 | **Assign** |
 | SSH keys | **Generate a key pair**, then **download both the private and the public key** |
@@ -106,9 +106,13 @@ Two of those need explaining.
 **The private key is downloadable once.** Lose it and you cannot SSH in and will rebuild the
 instance. Put it somewhere you keep things.
 
-**1 OCPU / 6 GB rather than the full 2 / 12.** It is still three times what this app needs,
-and it makes the instance much less likely to be flagged idle — §9. It also leaves half your
-free allowance spare for a second instance if you ever want a staging box.
+**1 OCPU / 4 GB rather than the full 2 / 12.** Still roughly three times what this app needs,
+and sized so your real memory use clears Oracle's 20% idle threshold — §10 shows the
+arithmetic, and 6 GB does *not* clear it. It also leaves most of your free allowance spare for
+a second instance if you ever want a staging box.
+
+A1.Flex memory can be changed later on a stopped instance, so this is adjustable rather than
+a commitment.
 
 Click **Create**.
 
@@ -209,10 +213,22 @@ interruption, not a loss.
 But a personal wardrobe app will sit under those thresholds easily. Three things help, in
 order of how much I'd recommend them:
 
-1. **Ask for a smaller instance** — the §4 recommendation of 1 OCPU / 6 GB rather than 2 / 12.
-   Your ~1 GB of real usage is 17% of 6 GB and 8% of 12 GB, so halving the box roughly doubles
-   your measured utilisation. Counter-intuitive, free, and still far more machine than this
-   needs.
+1. **Ask for a smaller instance.** Counter-intuitive, free, and still far more machine than
+   this app needs. The arithmetic, against an estimated ~1 GB of real use for Postgres plus
+   two Node processes plus Caddy:
+
+   | Shape | Memory used | Clears 20%? |
+   |---|---|---|
+   | 2 OCPU / 12 GB | ~8% | no |
+   | 1 OCPU / 6 GB | ~17% | **no** |
+   | **1 OCPU / 4 GB** | **~25%** | **yes** |
+
+   Which is why §4 says 4 GB and not 6. Only one of the three metrics has to clear 20% for the
+   instance to be safe, and memory is the one you can actually control.
+
+   Two honest caveats. The ~1 GB is an estimate — **measure after deploying** with
+   `free -h` and `docker stats`, and resize if you are nearer the line than this table
+   suggests. And resizing is cheap: A1.Flex memory changes on a stopped instance, no rebuild.
 2. **Watch for the email.** Oracle warns before acting.
 3. **Upgrade to pay-as-you-go** — §11. Reclamation does not apply, and you still pay nothing
    while inside the Always Free limits.
