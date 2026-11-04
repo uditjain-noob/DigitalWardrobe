@@ -1,11 +1,10 @@
 import { db } from "../../db";
 import { users } from "../../db/schema";
-import { env } from "../../env";
 import { getMailer } from "../../lib/email";
 import { hashPassword } from "../../lib/auth/password";
 import { consumeRateLimit } from "../../lib/limits/rate-limit";
 import { err, ok, type Result } from "../../shared/result";
-import { issueVerificationToken } from "./verification";
+import { issueVerificationToken, verificationLink } from "./verification";
 
 const SIGNUP_RATE_LIMIT = 5;
 const SIGNUP_RATE_WINDOW_SECONDS = 60 * 60; // 1 hour — NFR-4.8.
@@ -127,8 +126,4 @@ export async function registerAccount(
   }
 
   return ok({ userId, emailDelivered });
-}
-
-function verificationLink(token: string): string {
-  return `${env.APP_URL}/api/auth/verify?token=${token}`;
 }

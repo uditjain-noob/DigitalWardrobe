@@ -71,23 +71,30 @@ export async function requestPasswordReset(
     expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
   });
 
-  // Best-effort, same precedent as `registerAccount`: a mailer outage must
-  // not throw out of a function whose whole contract is "always resolves,
-  // never reveals anything." There is no success value here to signal
-  // non-delivery on (the function returns `void`), and no session yet for
-  // a UI to react from either — the address-privacy guarantee above is
-  // exactly why this has to stay a silent best-effort attempt rather than
-  // surfacing a status the caller could use to tell delivery apart from a
-  // nonexistent address.
-  try {
-    await getMailer().send({
+  // Best-effort, same precedent as `registerAccount` — except here the
+  // send is deliberately NOT awaited. There is no success value here to
+  // signal non-delivery on (the function returns `void`), and no session
+  // yet for a UI to react from either, so nothing is lost by not waiting
+  // for it. More importantly: awaiting it previously reopened the exact
+  // timing side channel the docstring above claims is closed — the
+  // known-address path paid for a real mailer round trip (an HTTP request
+  // to a provider) that the unknown-address path's single `SELECT` never
+  // did, so the two "nothing is observable" branches actually returned at
+  // measurably different times. Firing the send without awaiting it keeps
+  // both branches' return time dominated by the same lookup + insert cost.
+  // The `.catch()` is required, not optional: this process is long-lived
+  // (not serverless), so a detached promise here really does run to
+  // completion, and an unhandled rejection would otherwise surface as an
+  // unhandled-rejection warning/crash instead of being swallowed.
+  getMailer()
+    .send({
       to: input.email,
       subject: "Reset your Digital Wardrobe password",
       text: `Reset your password: ${resetLink(token)}\n\nThis link expires in 1 hour.`,
+    })
+    .catch(() => {
+      // Swallowed intentionally — see comment above.
     });
-  } catch {
-    // Swallowed intentionally — see comment above.
-  }
 }
 
 export type ConfirmPasswordResetError = "invalid" | "weak_password";

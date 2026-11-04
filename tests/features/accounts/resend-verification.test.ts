@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../../../src/db";
 import { users } from "../../../src/db/schema";
@@ -61,6 +61,25 @@ describe("resendVerificationEmail", () => {
 
     expect(r.ok).toBe(true);
     expect(mailer.sent).toHaveLength(0);
+  });
+
+  // Review Important 2 — the route must forward this signal (it was
+  // previously discarded, always responding `{ ok: true }` even when the
+  // resend itself failed to send). Same shape as the equivalent
+  // `registerAccount` test at tests/features/accounts/register.test.ts:165.
+  it("signals a failed resend out of band, without leaking why", async () => {
+    const user = await createTestUser("resend-mailfail@example.com", false);
+    const sendSpy = vi
+      .spyOn(mailer, "send")
+      .mockRejectedValueOnce(new Error("Failed to send email to b.com (status 500)"));
+
+    const r = await resendVerificationEmail(user);
+
+    sendSpy.mockRestore();
+
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.value.emailDelivered).toBe(false);
+    expect(JSON.stringify(r)).not.toContain("status 500");
   });
 
   // The route maps this to an HTTP 401 — see

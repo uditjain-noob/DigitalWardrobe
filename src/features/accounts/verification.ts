@@ -85,7 +85,7 @@ export async function consumeVerificationToken(
   });
 }
 
-function verificationLink(token: string): string {
+export function verificationLink(token: string): string {
   return `${env.APP_URL}/api/auth/verify?token=${token}`;
 }
 

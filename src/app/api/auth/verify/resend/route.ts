@@ -18,5 +18,8 @@ export async function POST(): Promise<NextResponse> {
     return NextResponse.json({ error: result.error }, { status });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    emailDelivered: result.value.emailDelivered,
+  });
 }
