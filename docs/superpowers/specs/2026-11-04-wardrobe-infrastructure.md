@@ -124,6 +124,13 @@ rewrite.
 
 1. **Split Postgres out to managed, always-on.** Change `DATABASE_URL`. Nothing in the code
    knows. Do this first because it also hands the backup problem to someone whose job it is.
+
+   **One thing does not travel for free.** The schema uses the `citext` extension for
+   case-insensitive email uniqueness, and `CREATE EXTENSION` needs a privileged role. That
+   is free on the containerised Postgres here, where the bootstrap user is a superuser, but
+   a managed provider may require the extension to be explicitly allowlisted or granted
+   before migrations will run. Check the provider's extension list *before* the move, not
+   after the first migration fails. (Found by the Task 2 review, 2026-11-04.)
 2. **Move the worker to its own machine.** It already runs as a separate process against the
    same database and bucket; it needs no inbound networking. Change nothing but where the
    container runs. This is also the fix if image processing starves the web process.
