@@ -880,15 +880,15 @@ it in a build step or assert equality in the test — do not hand-maintain two c
 ```ts
 // tests/components/ThemeProvider.test.tsx
 it("defaults to system", () => { expect(result.current.theme).toBe("system"); });
-it("system with a light device preference resolves to khadi", async () => {
+it("system with a light device preference resolves to tissue", async () => {
   matchMedia("(prefers-color-scheme: dark)", false);
-  expect(document.documentElement.dataset.theme).toBe("khadi");
-});
-it("system with a dark device preference resolves to chalk", async () => { ... });
-it("a pinned theme wins over the device preference", async () => {
-  act(() => result.current.setTheme("tissue"));
-  matchMedia("(prefers-color-scheme: dark)", true);
   expect(document.documentElement.dataset.theme).toBe("tissue");
+});
+it("system with a dark device preference resolves to indigo", async () => { ... });
+it("a pinned theme wins over the device preference", async () => {
+  act(() => result.current.setTheme("khadi"));
+  matchMedia("(prefers-color-scheme: dark)", true);
+  expect(document.documentElement.dataset.theme).toBe("khadi");
 });
 it("remembers a pinned theme across a reload", async () => { ... });
 it("follows a device preference that changes while open", async () => { ... });
@@ -896,10 +896,10 @@ it("follows a device preference that changes while open", async () => { ... });
 
 - [ ] **Step 6: Implement `ThemeProvider` and `useTheme`**
 
-NFR-8.5's pairing: `system` maps to **khadi** when the device is light and **chalk** when it
-is dark; tissue pairs with indigo for a user who pins neither. `system` is the default, and
-its user-facing label is **"Match my device"** — the settings screen shows five options, not
-four themes plus a toggle. The
+NFR-8.5's pairing: `system` maps to **tissue** when the device is light and **indigo** when
+it is dark; khadi pairs with chalk for a user who prefers that pair. `system` is the default,
+and its user-facing label is **"Match my device"** — the settings screen shows five options,
+not four themes plus a toggle. The
 resolved name is written to `document.documentElement.dataset.theme`; a pinned choice
 persists in `localStorage` and is read before first paint to avoid a flash of the wrong
 theme.
@@ -957,7 +957,7 @@ it("renders tiles at a fixed 3:4 ratio so lazy images reserve space", async () =
 // Plan 1 shows opaque photos, so this ground is invisible today. It is asserted now so
 // plan 3 can drop transparent cutouts onto it without touching the grid (FR-4.1 as amended).
 it("gives every tile plate the theme's cutout ground", async () => {
-  expect(getComputedStyle(plate).backgroundColor).toBe(rgb(THEMES.khadi.cut));
+  expect(getComputedStyle(plate).backgroundColor).toBe(rgb(THEMES.tissue.cut));
 });
 // the empty state is an instruction, not a blank — UI design doc, Accounts group
 it("empty wardrobe invites the first photo and says tagging can wait", async () => {

@@ -4,12 +4,12 @@
 
 **Goal:** Combinations that worked are kept, browsable, and recallable — the last of the three moments the spec was written for.
 
-**Architecture:** An outfit is a named set of items, not a template: no slots, no required positions. It reuses everything already built — plan 2's tag vocabulary for outfit tags, plan 2's `queryItems` for the builder's filters and for "outfits containing a piece that is X", plan 3's `displayVersionFor` for every piece image. The one genuinely new piece of machinery is the **flat-lay composition**: a pure function mapping a set of pieces to positions on a square, which both the library card and the single-outfit hero render from, so an outfit always looks the same wherever it appears.
+**Architecture:** An outfit is a named set of items, not a template: no slots, no required positions. It reuses everything already built — plan 2's tag vocabulary for outfit tags, plan 2's `queryItems` for the builder's filters and for "outfits containing a piece that is X", plan 3's `displayVersionFor` for every piece image. The one genuinely new piece of machinery is the **moodboard composition**: a pure function mapping a set of pieces to positions, sizes and rotations on a square, which both the library card and the single-outfit hero render from, so an outfit always looks the same wherever it appears.
 
 **Tech Stack:** As plans 1–3. No new dependencies — the composition is CSS positioning over transparent cutouts, not image generation.
 
 **Spec:** [docs/superpowers/specs/2026-11-03-digital-wardrobe-design.md](../specs/2026-11-03-digital-wardrobe-design.md)
-**UI design:** [docs/superpowers/specs/2026-11-04-wardrobe-ui-design.md](../specs/2026-11-04-wardrobe-ui-design.md) — Flat lay is the chosen treatment; Moodboard and Colour story are recorded alternatives.
+**UI design:** [docs/superpowers/specs/2026-11-04-wardrobe-ui-design.md](../specs/2026-11-04-wardrobe-ui-design.md) — **Moodboard** is the chosen treatment (settled by the user on 2026-11-04); Colour story is the density switch; Flat lay is the rejected alternative.
 **Follows:** [plan 1](2026-11-03-wardrobe-01-foundation-and-capture.md), [plan 2](2026-11-04-wardrobe-02-vocabulary-and-filtering.md), [plan 3](2026-11-04-wardrobe-03-providers-and-autofill.md).
 
 **Scope:** Spec sections 6.9 and 6.11, plus the two requirements plan 2 left reduced. **Not** here: section 6.10, outfits from a photograph of yourself — that is Phase 2 and is not built. Task 2 leaves the seam it will use.
@@ -38,9 +38,10 @@ Plans 1–3's constraints still apply. Additional values from the spec:
 
 1. **An outfit whose every piece has been archived.** Expected: still in the library, still renders, and says its pieces are archived — the outfit is a record of something that happened and must not silently empty. → Task 5, Task 8.
 2. **A piece in four outfits, deleted permanently.** Expected: all four updated, the confirmation names all four with their resulting counts, and an outfit reduced below two pieces is handled by an explicit rule rather than becoming invalid data. → Task 6.
-3. **A flat lay containing two pieces of the same category, or a category with no anatomical position** — two shirts, or an accessory. Expected: deterministic, non-overlapping placement; never two pieces stacked exactly on top of each other. → Task 7.
+3. **A rotated piece near the edge of the board.** A rotated rectangle's bounding box is larger than the rectangle, so `left + width <= 100` is *not* sufficient — the corners can still leave the square. Expected: every piece's rotated bounding box stays inside the board at every supported piece count. → Task 7.
 4. **Filtering outfits by "does not contain X" where an outfit has no tags at all.** Expected: it matches — an outfit with nothing in it certainly does not contain X. The naive `NOT EXISTS` join gets this right and a `NOT IN` subquery over tag ids does not. → Task 5.
 5. **An outfit cover photograph.** Expected: never enqueued for normalisation, never sent to a provider, and still deleted with the outfit. → Task 4.
+6. **A piece almost entirely hidden under another on the board.** Overlap is the point of a moodboard and also its failure mode: a four-piece outfit where one piece is 80% covered shows three. Expected: no piece is occluded beyond a stated fraction at any supported count. → Task 7.
 
 ---
 
@@ -144,7 +145,7 @@ Expected: FAIL — module not found.
 
 - [ ] **Step 3: Implement the four functions**
 
-`position` is dense and reassigned on every write, so the flat lay's ordering is stable.
+`position` is dense and reassigned on every write. The moodboard reads it directly — slot *n* belongs to the piece at position *n* — so a stable position is what makes the composition stable.
 
 **The Phase 2 seam:** `addPieces` takes an array, which is what a future outfit-from-a-photo
 flow needs — it proposes several pieces at once and creates the outfit in one call. Nothing
@@ -463,7 +464,7 @@ git commit -m "feat: deletion names affected outfits; archived pieces stay attac
 
 ---
 
-### Task 7: Flat-lay composition
+### Task 7: Moodboard composition
 
 **Files:**
 - Create: `src/features/outfits/composition.ts`
@@ -475,71 +476,104 @@ git commit -m "feat: deletion names affected outfits; archived pieces stay attac
   ```ts
   type CompositionPiece = { itemId: string; photoVersion: PhotoVersion; url: string;
                             categoryName: string | null; colourHex: string | null };
-  type Placement = { itemId: string; left: number; top: number; width: number; height: number; z: number };
-  layFlat(pieces: CompositionPiece[]): Placement[];
-  type Treatment = 'flatlay' | 'colourstory';
+  type Placement = { itemId: string; left: number; top: number;
+                     width: number; height: number; rotate: number; z: number };
+  layBoard(pieces: CompositionPiece[]): Placement[];
+  type Treatment = 'moodboard' | 'colourstory';
+  const MAX_ROTATION = 7;       // degrees, either way — UI design §1
+  const MAX_OCCLUSION = 0.45;   // no piece more than 45% covered
   ```
-  Percentages, not pixels, so one function serves the 150px library card and the full-width hero.
+  Percentages and degrees, not pixels, so one function serves the 150px library card and the
+  full-width hero.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-it("places a top above a bottom above shoes", async () => {
-  expect(top.top).toBeLessThan(bottom.top);
-  expect(bottom.top).toBeLessThan(shoes.top);
+it("places every piece", async () => { expect(layBoard(four)).toHaveLength(4); });
+it("gives pieces different sizes, so the board is not a grid", async () => {
+  expect(new Set(p.map(x => x.width)).size).toBeGreaterThan(1);
 });
-it("centres tops and bottoms horizontally", async () => { expect(top.left + top.width / 2).toBeCloseTo(50, 0); });
-it("puts outerwear beside, not on top of, the top", async () => { expect(overlap(outer, top)).toBeLessThan(0.3); });
+it("rotates pieces, alternating direction", async () => {
+  expect(p.some(x => x.rotate > 0)).toBe(true);
+  expect(p.some(x => x.rotate < 0)).toBe(true);
+});
+it("caps rotation at MAX_ROTATION either way", async () => {
+  for (const x of p) expect(Math.abs(x.rotate)).toBeLessThanOrEqual(MAX_ROTATION);
+});
+it("overlaps pieces — that is the treatment", async () => {
+  expect(p.some((a, i) => p.slice(i + 1).some(b => overlap(a, b) > 0))).toBe(true);
+});
 it("is deterministic — the same pieces give the same placements", async () => { expect(a).toEqual(b); });
-it("is order-independent — shuffling the input gives the same placements", async () => { expect(a).toEqual(b); });
-it("keeps every placement inside the square", async () => {
-  for (const p of placements) {
-    expect(p.left).toBeGreaterThanOrEqual(0);
-    expect(p.left + p.width).toBeLessThanOrEqual(100);
+it("keys placement by position in the outfit, not by category", async () => {
+  // a shirt and a shoe swapped in the input get each other's slots
+  const swapped = layBoard([shoe, shirt]);
+  expect(swapped[0]).toMatchObject({ left: p[0].left, top: p[0].top, rotate: p[0].rotate });
+});
+// Review Focus 3 — a rotated rect's bounding box is larger than the rect
+it.each([2,3,4,5,6,7,8])("keeps every rotated bounding box inside the board at %i pieces", (n) => {
+  for (const x of layBoard(pieces(n))) {
+    const b = rotatedBounds(x);
+    expect(b.left).toBeGreaterThanOrEqual(0);
+    expect(b.top).toBeGreaterThanOrEqual(0);
+    expect(b.right).toBeLessThanOrEqual(100);
+    expect(b.bottom).toBeLessThanOrEqual(100);
   }
 });
-// Review Focus 3
-it("offsets two pieces of the same category instead of stacking them", async () => {
-  const [a, b] = layFlat([shirt1, shirt2]);
-  expect(Math.abs(a.left - b.left) + Math.abs(a.top - b.top)).toBeGreaterThan(8);
+// Review Focus 6 — overlap is the point and the failure mode
+it.each([2,3,4,5,6,7,8])("occludes no piece beyond MAX_OCCLUSION at %i pieces", (n) => {
+  const p = layBoard(pieces(n));
+  for (const x of p) expect(occludedFraction(x, p)).toBeLessThanOrEqual(MAX_OCCLUSION);
 });
-it("places a category with no anatomical position without overlapping anything heavily", async () => {
-  // an accessory
-  expect(maxOverlap(accessory, others)).toBeLessThan(0.3);
+it("orders z so a piece is never fully buried", async () => { ... });
+it("handles two pieces", async () => { expect(layBoard(two)).toHaveLength(2); });
+it("handles more pieces than the slot table defines", async () => {
+  expect(layBoard(pieces(12))).toHaveLength(12);
 });
-it("places an untagged piece — no category at all", async () => { expect(placements).toHaveLength(2); });
-it("handles two pieces", async () => { expect(placements).toHaveLength(2); });
-it("handles eight pieces without any placement leaving the square", async () => { ... });
-it("gives shoes a smaller footprint than a garment", async () => { expect(shoes.width).toBeLessThan(top.width); });
-it("orders z so smaller pieces sit above larger ones", async () => { expect(shoes.z).toBeGreaterThan(top.z); });
+it("places an untagged piece with no category", async () => { expect(layBoard([a, b])).toHaveLength(2); });
+it("fills more of the board as the piece count rises", async () => {
+  expect(coverage(layBoard(pieces(6)))).toBeGreaterThan(coverage(layBoard(pieces(2))));
+});
 ```
+
+The three helpers — `rotatedBounds`, `occludedFraction`, `coverage` — live in the test file.
+They are the specification of what "a board that works" means, and writing them first is
+what makes the two `it.each` blocks worth having.
 
 - [ ] **Step 2: Run it to verify it fails**
 
 Run: `npx vitest run tests/features/outfits/composition.test.ts`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement `layFlat`**
+- [ ] **Step 3: Implement `layBoard`**
 
-A fixed slot table keyed by a **category family** — top, bottom, outer, feet, accessory,
-unknown — derived from the Category tag name, with every family having a defined slot so
-Review Focus 3's accessory and untagged cases are not special paths. A second piece in an
-occupied family takes a deterministic offset from the first, derived from its index, which is
-why the function must be sorted internally rather than trusting input order.
+A **slot table per piece count**, 2 through 8, each slot carrying left, top, width, height and
+rotation as literals, hand-tuned once so that every count satisfies the bounding-box and
+occlusion assertions above. Counts above 8 reuse the 8-slot table and scale each slot down,
+offsetting extras — rare enough not to deserve its own table, common enough not to crash.
 
-Percentages throughout. No randomness anywhere: FR-11.1's "reads as one piece" requires the
-same outfit to look identical in the library and on its own screen, and across reloads.
+Slot *n* belongs to the piece at `position` *n*. **Placement does not read the category at
+all**, which is the real difference from the rejected flat lay: flat lay decided position
+from what a garment *was*, which is what made its arrangement informative and also what gave
+it awkward cases — an accessory and an untagged piece needed special handling. A moodboard has
+neither the information nor the awkward cases.
+
+`z` ascends with index so later pieces sit on top, and the slot table is tuned so the pieces
+that end up underneath are the ones with the most exposed area.
+
+No randomness anywhere. FR-11.1's "reads as one piece" requires the same outfit to look
+identical in the library, on its own screen, and across reloads — and a board that reshuffles
+on refresh would read as broken rather than as designed.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npm test -- tests/features/outfits/composition.test.ts`
-Expected: PASS, 13 tests.
+Expected: PASS, 15 tests — 14 cases plus the two parameterised blocks across 7 counts each.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add -A
-git commit -m "feat: deterministic flat-lay composition from a set of pieces"
+git commit -m "feat: deterministic moodboard composition with bounded rotation and occlusion"
 ```
 
 ---
@@ -547,18 +581,30 @@ git commit -m "feat: deterministic flat-lay composition from a set of pieces"
 ### Task 8: The outfit library
 
 **Files:**
-- Create: `src/app/(app)/outfits/page.tsx`, `src/components/OutfitCard.tsx`, `src/components/FlatLay.tsx`, `src/components/ColourStory.tsx`, `src/components/EmptyOutfits.tsx`
-- Test: `tests/components/FlatLay.test.tsx`, `tests/components/OutfitCard.test.tsx`
+- Create: `src/app/(app)/outfits/page.tsx`, `src/components/OutfitCard.tsx`, `src/components/MoodBoard.tsx`, `src/components/ColourStory.tsx`, `src/components/EmptyOutfits.tsx`
+- Test: `tests/components/MoodBoard.test.tsx`, `tests/components/OutfitCard.test.tsx`
 
 **Interfaces:**
-- Consumes: `GET /api/outfits`, `layFlat`, `displayVersionFor` (plan 3).
+- Consumes: `GET /api/outfits`, `layBoard`, `displayVersionFor` (plan 3).
 - Produces: the library in both treatments, and its empty state.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-// FlatLay
+// MoodBoard
 it("renders one image per piece at its placement", async () => { expect(imgs).toHaveLength(3); });
+it("applies each placement's rotation", async () => {
+  expect(getComputedStyle(imgs[0]).transform).toMatch(/rotate/);
+});
+it("gives every piece the print matte", async () => {
+  // UI design §2.4 — the mitigation that makes a rotated photograph read as pinned
+  expect(getComputedStyle(piece).borderWidth).toBe("3px");
+  expect(getComputedStyle(piece).boxShadow).not.toBe("none");
+});
+it("takes the matte colour from the theme, not a literal", async () => {
+  expect(getComputedStyle(piece).borderColor).toBe(rgb(THEMES.tissue.surface));
+});
+it("honours prefers-reduced-motion by keeping rotation, which is static, and dropping nothing", async () => { ... });
 it("uses the version displayVersionFor chooses, not always the cutout", async () => {
   expect(img.src).toContain("/display"); // the user switched this piece back
 });
@@ -568,7 +614,7 @@ it("renders inside its container at any size", async () => { ... });
 // OutfitCard — FR-11.1
 it("shows the name, tags and piece count", async () => { expect(screen.getByText(/travel, warm/i)).toBeVisible(); });
 it("uses the cover photograph when one exists", async () => { expect(img.src).toContain("/cover"); });
-it("uses the flat lay when there is no cover", async () => { expect(screen.getByTestId("flatlay")).toBeVisible(); }); // FR-9.7 fallback
+it("uses the moodboard when there is no cover", async () => { expect(screen.getByTestId("moodboard")).toBeVisible(); }); // FR-9.7 fallback
 // Review Focus 1
 it("renders an outfit whose pieces are all archived, and says so", async () => {
   expect(screen.getByText(/3 pieces archived/i)).toBeVisible();
@@ -582,14 +628,20 @@ it("alt text names the outfit and its pieces", async () => { ... }); // NFR-8.3
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `npx vitest run tests/components/FlatLay.test.tsx tests/components/OutfitCard.test.tsx`
+Run: `npx vitest run tests/components/MoodBoard.test.tsx tests/components/OutfitCard.test.tsx`
 Expected: FAIL — modules not found.
 
 - [ ] **Step 3: Implement the five components and the page**
 
-Flat lay is the default (UI design §1); Colour story is a switch, persisted per account, and is
-the sensible default past a few hundred outfits. Moodboard is **not** built — recorded as a
-rejected alternative, and the one real photographs would damage most.
+Moodboard is the default (UI design §1, settled by the user); Colour story is a switch,
+persisted per account, and the sensible default past a few hundred outfits. Flat lay is
+**not** built — recorded as the rejected alternative.
+
+**The print matte is not decoration.** A 3px `surface` border and the system's one shadow
+around each piece is what makes a rotated photograph read as a print pinned to a board rather
+than an image dropped at an angle, and it is the agreed answer to the one real objection to
+this treatment. Both must survive; dropping the matte while keeping the rotation is how this
+screen goes wrong.
 
 Review Focus 1's rule in the UI: an all-archived outfit renders normally with a quiet line
 saying its pieces are archived. The outfit is a record of something that happened; emptying it
@@ -597,14 +649,14 @@ because the clothes went to a charity shop would lose the record.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npm test -- tests/components/FlatLay.test.tsx tests/components/OutfitCard.test.tsx`
-Expected: PASS, 13 tests.
+Run: `npm test -- tests/components/MoodBoard.test.tsx tests/components/OutfitCard.test.tsx`
+Expected: PASS, 17 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add -A
-git commit -m "feat: outfit library in flat lay, with colour story as a density switch"
+git commit -m "feat: outfit library as a moodboard, with colour story as a density switch"
 ```
 
 ---
@@ -637,7 +689,7 @@ it("adding a cover uploads it and shows it as the cover", async () => { ... });
 it("says a photograph of you is never sent anywhere", async () => {
   expect(screen.getByText(/never sent anywhere/i)).toBeVisible();
 }); // NFR-4.5
-it("without a cover, says the flat lay is used", async () => { expect(screen.getByText(/flat lay/i)).toBeVisible(); });
+it("without a cover, says the moodboard is used", async () => { expect(screen.getByText(/moodboard/i)).toBeVisible(); });
 it("removing a piece below two is refused with a reason", async () => {
   expect(screen.getByText(/needs at least two/i)).toBeVisible();
 });
@@ -830,7 +882,7 @@ git commit -m "feat: outfit filtering, in-outfits links, and the whole-product v
   and cover photographs already exist (FR-9.7 is what FR-10.5 attaches to). When it is built
   it needs an attribute-reading call per garment detected, which is plan 3's
   `runWithFallback` — not a new provider path.
-- **Moodboard** as an outfit treatment. Designed, compared, rejected in the UI design doc.
+- **Flat lay** as an outfit treatment. Designed, compared, and rejected by the user in favour of Moodboard. It remains the fallback if Moodboard does not survive real photographs — UI design §9.
 - **Offline browsing**, **sharing**, and anything in the spec's non-goals.
 
 ## After this plan

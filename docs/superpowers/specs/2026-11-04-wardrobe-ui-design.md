@@ -1,7 +1,8 @@
 # Digital Wardrobe — UI Design
 
 **Date:** 2026-11-04
-**Status:** Complete. Every requirement in the spec has a designed screen.
+**Status:** Complete. Every requirement in the spec has a designed screen. Outfit
+treatment and default theme settled by the user on 2026-11-04.
 **Implements:** [2026-11-03-digital-wardrobe-design.md](2026-11-03-digital-wardrobe-design.md)
 
 **Mockups** — three pages, one design system, four themes throughout:
@@ -29,16 +30,23 @@ Banding by category and moving colour onto the chip keeps the deck's look, puts 
 you reach for first on the outside, and still answers "do I own a black shirt" inside the
 Shirts band.
 
-### Decisions taken without an explicit answer
+### Decisions the user made
 
-Put to the user twice and left open. Recorded as the design's calls, not theirs.
+Both were put to the user and answered on 2026-11-04, overriding the design's earlier calls.
 
-- **Outfit library: Flat lay**, with Colour story as a density switch past roughly thirty
-  outfits. Flat lay is the only one of the three treatments where the arrangement itself
-  carries information — whether the outfit works — which is the question that screen is
-  opened to answer. Moodboard is the best-looking and the one real photographs will damage
-  most: silhouettes at angles read as composed, photographs at angles read as dropped.
-- **Default theme: Khadi**, reached through "Match my device". All four ship.
+- **Outfit library: Moodboard** — pieces pinned at angles, overlapping, unevenly sized, two
+  to a row. Colour story remains the density switch past roughly thirty outfits. Flat lay is
+  recorded as the rejected alternative.
+
+  The design had argued for Flat lay on the grounds that its arrangement carries information
+  — whether the outfit *works* — and that Moodboard is the treatment real photographs damage
+  most: silhouettes at angles read as composed, photographs at angles read as dropped. The
+  user chose Moodboard. **Mitigation adopted rather than argued further:** each piece gets a
+  print matte (§2.4), which makes the angle read as a photograph pinned to a board rather
+  than an image dropped at random, and rotation is capped at ±7°. This is the answer to the
+  objection, not a hedge against the choice.
+- **Default theme: Tissue**, reached through "Match my device", which pairs it with Indigo in
+  dark. All four themes ship.
 
 ---
 
@@ -62,8 +70,8 @@ Four themes, each a complete palette. Two light-first, two dark-first.
 `cut` is the ground an alpha cutout composites onto, and the reason it is a token is §5.1.
 
 **Pairing (NFR-8.5).** The setting offers five options and **"Match my device" is the
-default**: Khadi when the device is light, Chalk when it is dark. Tissue pairs with Indigo.
-Pinning a named theme holds it in both appearances.
+default**: **Tissue** when the device is light, **Indigo** when it is dark. Khadi pairs with
+Chalk for a user who prefers that pair. Pinning a named theme holds it in both appearances.
 
 Grounded in the subject: undyed handloom, pattern tissue, tailor's chalk on wool, an indigo
 vat with brass. Deliberately avoided: warm cream with a terracotta accent, and near-black
@@ -104,6 +112,7 @@ throughout — no all-caps labels. No face loaded that is not used.
 | `HitArea` | guarantees 44x44 of tap area around a small control without changing its drawn size |
 | Bottom tabs | Wardrobe, Outfits, Add, Keys |
 | Counted action | every destructive or spending action names its size: "Save 5 tags", "Cut out 100", "Show 9 pieces" |
+| Print matte | a 3px `surface` border plus the one shadow in the system, around every piece on a moodboard. It is what makes a rotated photograph read as a print pinned to a board rather than an image dropped at an angle — the mitigation for the one real objection to Moodboard (§1) |
 
 ### 2.5 Copy rules
 
@@ -171,9 +180,9 @@ Words were treated as design material, and these rules hold across all 54 states
 
 | Screen | Serves | Page |
 |---|---|---|
-| Library, Flat lay (chosen) | FR-11.1, FR-11.2 | Swatch Deck |
-| Library, Moodboard (alternative) | FR-11.1 | Swatch Deck |
+| Library, Moodboard (chosen) | FR-11.1, FR-11.2 | Swatch Deck |
 | Library, Colour story (density switch) | FR-11.1 | Swatch Deck |
+| Library, Flat lay (rejected alternative) | FR-11.1 | Swatch Deck |
 | One outfit — composition, tags, piece rows | FR-9.9 | Swatch Deck |
 | Building — the wardrobe's own filters, a tray | FR-9.2 | Editing |
 | Editing — name, tags, cover, delete | FR-9.4, FR-9.6, FR-9.7, FR-9.8 | Editing |
@@ -295,8 +304,8 @@ plan 1 Task 14 Step 8.
 
 Four themes is more than the spec asked for, so pairing is how it satisfies "honours the
 device's light and dark appearance setting": **Match my device** is the default and resolves
-to Khadi or Chalk; Tissue pairs with Indigo; a pinned theme holds in both. Written into
-NFR-8.5 and tested in plan 1 Task 14 Step 5.
+to **Tissue** or **Indigo**; Khadi pairs with Chalk; a pinned theme holds in both. Written
+into NFR-8.5 and tested in plan 1 Task 14 Step 5.
 
 ### 5.5 Alternative text — a formula, not an improvisation
 
@@ -351,6 +360,12 @@ Twelve additions, each because the requirement alone left a hole. None contradic
   thirty-four decisions and nobody finishes. Grouping makes it about eight. The cost is
   precision: fixing one wrong tag on one garment becomes a second pass. The per-piece screen
   still exists for a single garment.
+- **Moodboard placement is keyed by position in the outfit, not by what the garment is.**
+  Flat lay read a piece's category to decide where it goes, which is why it carried
+  information. A moodboard does not: the first piece always takes the first slot. That makes
+  the composition simpler and removes flat lay's awkward cases entirely — an accessory and an
+  untagged piece need no special handling — at the cost of the arrangement telling you
+  nothing. It is a visual record, not a judgement about whether the outfit works.
 
 ---
 
@@ -390,19 +405,24 @@ its refused state, check-your-email, sign in, reset, new password, the privacy s
 
 ## 8. Open questions
 
-Both have a working answer, so nothing is blocked.
-
-1. **Outfit treatment** — Flat lay is the design's call. Moodboard or Colour story instead
-   would change the outfit library and the hero of the single-outfit screen.
-2. **Default theme** — Khadi, via "Match my device". All four ship either way.
+**None.** Both outstanding questions were answered on 2026-11-04 — Moodboard for the outfit
+library, Tissue as the default theme — and both are recorded in §1 with what they changed.
 
 ---
 
 ## 9. Honest notes on the mockups
 
 - **Garments are drawn outlines, not photographs.** Real photographs read denser and noisier.
-  The densest state — Everything, three to a row — is most likely to need revisiting once
-  real cutouts exist.
+  Two states are most likely to need revisiting once real cutouts exist: **Everything**, three
+  to a row, and the **Moodboard**.
+- **Moodboard is the treatment most exposed to that gap, and it is the chosen one.** Angled,
+  overlapping silhouettes read as composed; angled, overlapping photographs can read as
+  dropped. The print matte and the ±7° rotation cap (§2.4, §1) are the mitigation, and they
+  are a genuine fix rather than a hedge — a matte turns a rotation into a pinned print. But
+  this is the one place in the design where the mockup flatters the result, and it should be
+  looked at again with twenty real cutouts on screen before the treatment is considered
+  settled. If it does not hold up, Flat lay is already designed and Colour story is already
+  built as the switch.
 - **The swatch chip depends on a tag that may be missing or plural.** FR-5.1 allows any tag
   to be empty and FR-5.3 allows several colours. Two states are not drawn: **no Colour tag**,
   which falls back to the `cut` ground, and **several Colour tags**, where the field takes the
