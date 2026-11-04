@@ -46,11 +46,16 @@ services:
       retries: 30
 
   garage-init:
-    image: curlimages/curl:latest
-    # The default `curl_user` (uid 100) can't write the apk db to install
-    # jq below — root only for this one-shot bootstrap job, never for the
-    # long-running `garage` service itself.
-    user: "root"
+    # Built from docker/garage-init.Dockerfile: alpine:3.21 with curl and jq
+    # installed at image build time, not fetched by the entrypoint at
+    # container start. That keeps `docker compose up` from needing live
+    # network access to Alpine's package mirror on every run (only the
+    # image build/pull needs it, same as any other pinned image here), and
+    # means the container never needs to run as root to install a package —
+    # it runs as the image's own non-root `nobody` user.
+    build:
+      context: ./docker
+      dockerfile: garage-init.Dockerfile
     depends_on:
       garage:
         condition: service_healthy
@@ -64,10 +69,7 @@ services:
       S3_SECRET_ACCESS_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
     volumes:
       - ./docker/garage-init.sh:/garage-init.sh:ro
-    # `curlimages/curl` (Alpine-based) doesn't ship jq; install it before
-    # running the bootstrap script, which parses the admin API's JSON
-    # responses with it instead of grep/sed.
-    entrypoint: ["sh", "-c", "apk add --no-cache jq >/dev/null && exec sh /garage-init.sh"]
+    entrypoint: ["sh", "/garage-init.sh"]
 
 volumes:
   postgres-data:
