@@ -73,15 +73,26 @@ export class S3ObjectStore implements ObjectStore {
     // `DeleteObjectsCommand` does not error on an already-absent key — it
     // reports it in `.Errors` with code `NoSuchKey` alongside the
     // successfully-deleted ones, which is exactly the "tolerate a mix of
-    // present and absent keys" behaviour this method promises. We don't
-    // inspect `.Errors`: a `NoSuchKey` entry means the end state (the key is
-    // gone) already matches what the caller asked for.
-    await this.client.send(
+    // present and absent keys" behaviour this method promises. A
+    // `NoSuchKey` entry means the end state (the key is gone) already
+    // matches what the caller asked for, so those are filtered out. Any
+    // other code in `.Errors` — throttling, an internal error, access
+    // denied on one key — is a genuine per-object failure: the request as a
+    // whole did not throw, but that key was NOT deleted, so we must not
+    // resolve as though it was (NFR-5.2: no orphaned photo).
+    const result = await this.client.send(
       new DeleteObjectsCommand({
         Bucket: this.bucket,
         Delete: { Objects: keys.map((Key) => ({ Key })) },
       }),
     );
+    const realErrors = (result.Errors ?? []).filter(
+      (error) => error.Code !== "NoSuchKey",
+    );
+    if (realErrors.length > 0) {
+      const codes = realErrors.map((error) => error.Code).join(", ");
+      throw new Error(`delete failed for ${realErrors.length} key(s): ${codes}`);
+    }
   }
 
   async exists(key: string): Promise<boolean> {

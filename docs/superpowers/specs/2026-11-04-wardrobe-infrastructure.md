@@ -309,7 +309,7 @@ worth watching. A 1,000-piece first session is 1,000 matting calls.
 | Document | Change |
 |---|---|
 | Spec §9 "Left to the builder" | the first bullet — database, hosting, image storage, job runner, transactional email — is now decided here and points at this document |
-| Plan 1 Task 1 | the `docker-compose.yml` it builds for dev is the same file production runs, with MinIO standing in for R2 locally |
+| Plan 1 Task 1 | the `docker-compose.yml` it builds for dev is the same file production runs, with Garage standing in for R2 locally |
 | Plan 1 Task 18 Step 5 | replaced: the concrete deploy, not "managed Postgres, S3-compatible bucket" |
 | Plan 1 Task 18 | gains the backup and restore-drill step NFR-5.1 requires |
 

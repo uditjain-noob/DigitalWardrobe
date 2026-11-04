@@ -47,6 +47,10 @@ services:
 
   garage-init:
     image: curlimages/curl:latest
+    # The default `curl_user` (uid 100) can't write the apk db to install
+    # jq below — root only for this one-shot bootstrap job, never for the
+    # long-running `garage` service itself.
+    user: "root"
     depends_on:
       garage:
         condition: service_healthy
@@ -60,7 +64,10 @@ services:
       S3_SECRET_ACCESS_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
     volumes:
       - ./docker/garage-init.sh:/garage-init.sh:ro
-    entrypoint: ["sh", "/garage-init.sh"]
+    # `curlimages/curl` (Alpine-based) doesn't ship jq; install it before
+    # running the bootstrap script, which parses the admin API's JSON
+    # responses with it instead of grep/sed.
+    entrypoint: ["sh", "-c", "apk add --no-cache jq >/dev/null && exec sh /garage-init.sh"]
 
 volumes:
   postgres-data:

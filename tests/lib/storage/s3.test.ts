@@ -1,6 +1,6 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
-import { getObjectStore, photoKey } from "../../../src/lib/storage";
+import { S3ObjectStore, getObjectStore, photoKey } from "../../../src/lib/storage";
 
 // Integration test against the Garage service from docker-compose.yml (an
 // S3-compatible, locally-run stand-in for Cloudflare R2 — see that file's
@@ -45,7 +45,16 @@ describe("S3ObjectStore", () => {
     const signed = new URL(url);
     const plainUrl = `${signed.origin}${signed.pathname}`;
 
-    expect((await fetch(plainUrl)).status).toBeGreaterThanOrEqual(400);
+    // Signing enforcement — not just "the request failed somehow" — was the
+    // deciding criterion for choosing Garage over the alternatives (see
+    // task-8-report.md). A bare >= 400 would also pass on an unrelated
+    // 404, so this asserts the literal status Garage is confirmed to
+    // return for an unsigned GET (403) plus the access-denied error code
+    // in the body, which together can only mean signing was rejected.
+    const res = await fetch(plainUrl);
+    expect(res.status).toBe(403);
+    const body = await res.text();
+    expect(body).toMatch(/AccessDenied/);
   });
 
   it("delete removes the objects", async () => {
@@ -71,6 +80,32 @@ describe("S3ObjectStore", () => {
       store.delete([presentKey, absentKey]),
     ).resolves.toBeUndefined();
     expect(await store.exists(presentKey)).toBe(false);
+  });
+
+  it("delete surfaces a genuine per-key failure instead of resolving silently", async () => {
+    // Garage (like real S3) only ever returns `NoSuchKey` in `.Errors` for
+    // an already-absent key — there is no reliable way to provoke a
+    // genuine failure (throttling, an internal error, access denied on one
+    // key) against a real running server from a test. So this stubs the
+    // S3 client's `send` for this one call to return a partial-failure
+    // response carrying a non-`NoSuchKey` code, on a throwaway store
+    // instance (not the shared `store`, so no other test is affected).
+    const isolatedStore = new S3ObjectStore();
+    const client = (isolatedStore as unknown as { client: { send: unknown } })
+      .client;
+    const sendSpy = vi
+      .spyOn(client as { send: (...args: unknown[]) => unknown }, "send")
+      .mockResolvedValueOnce({
+        Errors: [
+          { Key: "users/x/photos/y/original", Code: "AccessDenied" },
+        ],
+      });
+
+    await expect(isolatedStore.delete(["irrelevant-key"])).rejects.toThrow(
+      /AccessDenied/,
+    );
+
+    sendSpy.mockRestore();
   });
 
   it("exists reports true for a stored key and false for an absent one", async () => {
