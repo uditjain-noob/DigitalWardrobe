@@ -69,3 +69,25 @@ export const rateLimits = pgTable(
   },
   (table) => [primaryKey({ columns: [table.key, table.windowStart] })],
 );
+
+/**
+ * Single-use tokens emailed to a user to prove control of their address —
+ * for signup verification (`purpose: 'verify'`) and, from a later task,
+ * password reset (`purpose: 'reset'`). `id` is the SHA-256 hash (hex) of the
+ * raw token, for the same reason as `sessions.id`: a database leak must not
+ * hand out usable tokens. `usedAt` being non-null (or `expiresAt` being in
+ * the past, or `purpose` not matching what the caller expected) all make a
+ * token equally unusable — callers must treat every rejection identically.
+ */
+export const emailTokens = pgTable("email_tokens", {
+  id: text("id").primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  purpose: text("purpose", { enum: ["verify", "reset"] }).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

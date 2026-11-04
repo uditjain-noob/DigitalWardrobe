@@ -28,6 +28,16 @@ const testEnv = Object.fromEntries(
 );
 
 export default defineConfig({
+  // `tsconfig.json` sets `"jsx": "preserve"` because Next's own compiler
+  // (SWC) does the actual JSX transform for the app build. Vite's default
+  // transformer (oxc, as of Vite 7) honors that same tsconfig setting, but
+  // can't itself emit "preserved" JSX — it needs to be told to transform
+  // it, hence overriding just this one option for the test run. This only
+  // affects how Vitest transforms files in-memory; it has no effect on
+  // `next build`, which never goes through oxc/esbuild/Vite.
+  oxc: {
+    jsx: { runtime: "automatic" },
+  },
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
