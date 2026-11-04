@@ -25,3 +25,20 @@ export const users = pgTable("users", {
     .defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
+
+/**
+ * `id` is the SHA-256 hash (hex) of the session token, not the token itself
+ * — so a database leak (backup, replica, SQL injection) does not hand out
+ * usable session tokens. The raw token only ever exists in the cookie and
+ * in memory between `createSession` and `setSessionCookie`.
+ */
+export const sessions = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

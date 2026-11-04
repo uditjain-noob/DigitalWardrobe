@@ -32,5 +32,12 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     env: testEnv,
+    // `resetTestDb` truncates every table and is called from `beforeEach`
+    // in each DB-touching test file. That only isolates tests correctly if
+    // test files run one at a time against the shared real Postgres —
+    // otherwise one file's truncate can delete rows another file inserted
+    // moments before, an intermittent FK-violation/missing-row failure.
+    // Tests within a file still run sequentially either way.
+    fileParallelism: false,
   },
 });
