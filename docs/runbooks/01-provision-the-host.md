@@ -42,7 +42,14 @@ Read these before you start. Each one wastes an hour if you meet it unprepared.
 
 1. https://www.oracle.com/cloud/free/ → **Start for free**.
 2. Country, name, email. Verify the email.
-3. Password. "Company name" can be anything — "Personal" is fine.
+3. Password, and **"legal company name"** — a required field even for individuals. Enter
+   **your own full name, exactly as it appears on the card** you use in step 5. It is an
+   account label, not a declaration that you have a company, and it registers nothing.
+
+   Do not invent a company name. This is the field most likely to trip the fraud check in the
+   warning below: Oracle cross-references name, address and card, and an unverifiable company
+   that does not match your card is exactly the inconsistency that gets accounts banned at
+   signup. Your own name matches by construction.
 4. **Home region — choose carefully.** See §2 below before picking. It is effectively
    permanent for Always Free resources.
 5. Card details. Oracle places a **~$1 temporary hold** to verify it and releases it. Always
