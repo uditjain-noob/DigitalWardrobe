@@ -33,7 +33,7 @@ Read these before you start. Each one wastes an hour if you meet it unprepared.
    console and not in Ubuntu's own iptables is the single most common "why can't I reach my
    server" — §6.
 4. **Idle Always Free instances get reclaimed.** Under 20% CPU, network *and* memory over 7
-   days and Oracle stops it. A wardrobe app on a 12 GB box is comfortably under that. §9 is
+   days and Oracle stops it. A wardrobe app on a roomy box sits comfortably under that. §10 is
    the fix, and it's counter-intuitive: ask for a *smaller* instance.
 
 ---
@@ -129,7 +129,7 @@ Expected. Four ways through, cheapest first:
    polls and grabs capacity the moment it appears. Standard practice, not a hack — read it
    before you run it, since it holds your API credentials.
 
-If it stays stubborn, §10 (pay-as-you-go) gives launch priority and fixes this properly.
+If it stays stubborn, §11 (pay-as-you-go) gives launch priority and fixes this properly.
 
 ## 6. Open the ports — both layers
 
