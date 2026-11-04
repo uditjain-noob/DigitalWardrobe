@@ -8,10 +8,10 @@ import { defineConfig } from "vitest/config";
 // (e.g. in CI) always wins.
 const testEnvDefaults: Record<string, string> = {
   DATABASE_URL: "postgres://wardrobe:wardrobe@localhost:5432/wardrobe_test",
-  S3_ENDPOINT: "http://localhost:9000",
+  S3_ENDPOINT: "http://localhost:3900",
   S3_BUCKET: "wardrobe",
-  S3_ACCESS_KEY_ID: "wardrobe",
-  S3_SECRET_ACCESS_KEY: "wardrobe12345",
+  S3_ACCESS_KEY_ID: "GKdeadbeefdeadbeefdeadbeef",
+  S3_SECRET_ACCESS_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
   RESEND_API_KEY: "test_resend_key",
   APP_URL: "http://localhost:3000",
   SESSION_COOKIE_NAME: "wardrobe_session",

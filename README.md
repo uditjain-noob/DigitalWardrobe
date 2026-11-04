@@ -78,7 +78,7 @@ service.
 
 **Node 26 LTS** · **Next.js 15** App Router · **Postgres 16** via Drizzle, holding data and the
 job queue · **pg-boss** · **sharp** and heic-convert · S3-compatible object storage
-(**Cloudflare R2**, MinIO locally) · **Caddy** for TLS · **Resend** for mail · **Vitest**
+(**Cloudflare R2**, Garage locally) · **Caddy** for TLS · **Resend** for mail · **Vitest**
 against a real database
 
 Deployed as four containers on one small box, from the same `docker-compose.yml` that runs

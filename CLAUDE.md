@@ -86,7 +86,7 @@ service.
   behind interfaces: `ObjectStore`, `Mailer`, images, jobs, providers).
 - **Postgres 16** via Drizzle, holding data *and* the job queue (**pg-boss** — it polls and
   holds a connection, which is why serverless Postgres is the wrong fit).
-- **Objects** in an S3-compatible bucket (Cloudflare R2 in production, MinIO locally).
+- **Objects** in an S3-compatible bucket (Cloudflare R2 in production, Garage locally).
 - **The worker** is the same image with a different entrypoint (NFR-1.5).
 - **Photos are served from a stable per-version app URL** that checks ownership and 302s to a
   short-lived signed storage URL. Bytes never proxy through the app (NFR-3.6). This is also
@@ -99,7 +99,7 @@ service.
   Throw only for programmer error and for a failed secret decrypt.
 - Every query is scoped by `userId` at one boundary. A non-owner and a non-existent row take
   the same code path, so "not found" never confirms existence.
-- Vitest against a **real** Postgres and MinIO from `docker-compose.yml`. No mocking the
+- Vitest against a **real** Postgres and Garage from `docker-compose.yml`. No mocking the
   database.
 - **One commit per task**, message in the plan's final step.
 - The dev `docker-compose.yml` is the file production runs. Do not add a dev-only service
@@ -111,7 +111,7 @@ service.
 npm test              # test-db.sh (compose up, migrate) then vitest
 npm run dev           # next dev
 npm run worker        # the pg-boss worker
-docker compose up -d  # postgres + minio locally
+docker compose up -d  # postgres + garage locally
 npx drizzle-kit generate && npx drizzle-kit migrate
 ```
 

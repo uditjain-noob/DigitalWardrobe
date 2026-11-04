@@ -1,9 +1,18 @@
 # Postgres + object storage for dev and test. This is the file production
-# runs too (infrastructure doc §3) — MinIO stands in locally for Cloudflare
-# R2; Caddy is added in front for TLS when this is deployed. Nothing here is
-# dev-only in a way production would need a different topology to replace:
-# `minio-init` is a one-shot bootstrap job (it creates the bucket and exits),
-# not a standing service.
+# runs too (infrastructure doc §3) — Garage stands in locally for Cloudflare
+# R2, which production uses directly (not run from this file); Caddy is
+# added in front for TLS when this is deployed. Nothing here is dev-only in
+# a way production would need a different topology to replace: `garage-init`
+# is a one-shot bootstrap job (it provisions the bucket and access key, then
+# exits), not a standing service.
+#
+# Garage, not MinIO: `minio/minio` and `minio/mc` are no longer pullable
+# from Docker Hub or its mirrors (manifest not found) as of this task. Of
+# the alternatives tried, Garage is the one that both pulls and, like R2,
+# genuinely enforces SigV4 request signing — see
+# tests/lib/storage/s3.test.ts's "an unsigned url for the same key is
+# refused" test, which fails against a server that lets unsigned requests
+# through.
 services:
   postgres:
     image: postgres:16
@@ -21,34 +30,38 @@ services:
       timeout: 5s
       retries: 30
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: wardrobe
-      MINIO_ROOT_PASSWORD: wardrobe12345
+  garage:
+    image: dxflrs/garage:v1.1.0
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "3900:3900" # S3 API
+      - "3901:3901" # internal RPC
+      - "3903:3903" # admin API (used only by garage-init, below)
     volumes:
-      - minio-data:/data
+      - ./docker/garage.toml:/etc/garage.toml:ro
+      - garage-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "/garage", "status"]
       interval: 2s
       timeout: 5s
       retries: 30
 
-  minio-init:
-    image: minio/mc:latest
+  garage-init:
+    image: curlimages/curl:latest
     depends_on:
-      minio:
+      garage:
         condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 wardrobe wardrobe12345 &&
-      (mc mb local/wardrobe || true)
-      "
+    environment:
+      GARAGE_ADMIN_URL: "http://garage:3903"
+      # Keep in sync with docker/garage.toml's [admin] admin_token.
+      GARAGE_ADMIN_TOKEN: "Mgg74GovrCZIxFW8KmHUp2GR+VFqU+u37VaCyUnu/3g="
+      # Keep in sync with .env.example / vitest.config.ts's S3_* defaults.
+      S3_BUCKET: "wardrobe"
+      S3_ACCESS_KEY_ID: "GKdeadbeefdeadbeefdeadbeef"
+      S3_SECRET_ACCESS_KEY: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    volumes:
+      - ./docker/garage-init.sh:/garage-init.sh:ro
+    entrypoint: ["sh", "/garage-init.sh"]
 
 volumes:
   postgres-data:
-  minio-data:
+  garage-data:

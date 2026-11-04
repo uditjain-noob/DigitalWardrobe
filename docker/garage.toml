@@ -1,0 +1,29 @@
+# Single-node Garage config for local dev/test (docker-compose.yml's
+# `garage` service). Garage stands in for Cloudflare R2 here — see that
+# file's header comment. The secrets below are fixed, dev-only values (the
+# same spirit as Postgres's `wardrobe`/`wardrobe` in docker-compose.yml);
+# this node is never reachable outside the compose network and this config
+# is never used in production.
+metadata_dir = "/data/meta"
+data_dir = "/data/data"
+db_engine = "lmdb"
+
+# One node, so there is nothing to replicate.
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "736174246eea590f460330de31d1e5e7010bd9d1bb11c1db638a6ef1d21d5a4a"
+
+[s3_api]
+# "auto" matches Cloudflare R2's S3 API region, so the same `S3Client`
+# config (region included) works unchanged against both.
+s3_region = "auto"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"
+
+[admin]
+# Used only by `docker/garage-init.sh` to provision the bucket and access
+# key over Garage's admin HTTP API.
+api_bind_addr = "[::]:3903"
+admin_token = "Mgg74GovrCZIxFW8KmHUp2GR+VFqU+u37VaCyUnu/3g="

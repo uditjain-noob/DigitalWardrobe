@@ -13,14 +13,15 @@ TEST_DATABASE_URL="postgres://${PG_USER}:wardrobe@localhost:5432/${TEST_DB_NAME}
 echo "test-db: ensuring postgres is up"
 docker compose up -d postgres
 
-# Best-effort: this task's own tests only need Postgres. Object storage
-# (MinIO) is wired here for later tasks (e.g. Task 8), but is not required
-# for `npm test` to pass right now, so a pull failure here does not fail the
-# harness.
-echo "test-db: ensuring minio is up (best-effort)"
-if ! docker compose up -d minio minio-init; then
-  echo "test-db: warning — could not start minio/minio-init (run 'docker compose logs minio' to see why); continuing, since this task's tests do not use object storage" >&2
-fi
+# Required: tests/lib/storage/s3.test.ts asserts against real object
+# storage (Garage locally; see docker-compose.yml's header comment for why
+# Garage rather than MinIO). Unlike Task 1's best-effort treatment — written
+# when no test exercised storage — a failure here now fails the harness.
+echo "test-db: ensuring garage is up"
+docker compose up -d garage
+echo "test-db: provisioning garage bucket and access key"
+docker compose up -d garage-init
+docker compose wait garage-init
 
 echo "test-db: waiting for postgres to accept connections"
 until docker compose exec -T postgres pg_isready -U "$PG_USER" >/dev/null 2>&1; do
