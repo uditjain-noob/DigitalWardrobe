@@ -226,9 +226,15 @@ wardrobe. It matters most in outfit previews, where three or four photos sit sid
 and three different backgrounds look like a mistake.
 
 - **FR-4.1** Every uploaded garment photo is normalised: the garment is located, the
-  background removed, and the garment placed on a uniform neutral ground with consistent
-  padding and a consistent aspect ratio. The cutout is produced by the matting capability
-  of whichever credential is first in line (FR-3.3).
+  background removed, and the result stored as a **cutout with an alpha channel**, trimmed
+  to the garment and padded to a consistent aspect ratio. The cutout is produced by the
+  matting capability of whichever credential is first in line (FR-3.3).
+
+  **The neutral ground is not stored.** It is supplied by the active theme at render time
+  and composited behind the cutout. Baking a ground colour into the stored image makes it
+  wrong in one theme or the other — a grey chosen for a light theme is a grey hole in a
+  dark one — and would mean reprocessing every photo to change it. Amended 2026-11-04 on
+  the UI design's finding; see `2026-11-04-wardrobe-ui-design.md` §5.1.
 - **FR-4.2 Matting, never generation.** The capability used must produce a mask or an
   alpha-cut image — it removes background pixels and nothing else. Generative image
   editing must not be used for this, even when it is available on the same credential and
@@ -522,10 +528,14 @@ provider.
   ownership is checked on every request, the storage URL is unguessable and time-boxed,
   the bytes do not proxy through the application, and the stable outer URL remains
   cacheable — which is what NFR-1.4 depends on.
-- **NFR-3.7 Pipeline.** Resize, format conversion, and thumbnailing happen locally.
-  Background removal is a third-party API call (NFR-3.8). Both the original and the
+- **NFR-3.7 Pipeline.** Resize, format conversion, trimming, padding and thumbnailing happen
+  locally. Background removal is a third-party API call (NFR-3.8). Both the original and the
   normalised version are stored for every photo, which roughly doubles per-photo storage —
   budgeted for in NFR-7.2.
+
+  The normalised version is stored in a format carrying an alpha channel (FR-4.1), so it is
+  **not** a JPEG. The ground is composited by the client from a theme token, never written
+  into the file. Thumbnails of normalised images likewise keep their transparency.
 - **NFR-3.8 Where background removal runs.** On a third-party service, called with one of
   the user's own credentials (FR-3.3). No model is hosted, downloaded, or run by this
   application, and no GPU is required. The capability used must be **matting** — a mask or
@@ -642,14 +652,27 @@ operator's, and open signup is what makes caps necessary.
 
 ### 7.8 Accessibility and usability
 
-- **NFR-8.1** Text and interactive controls meet WCAG 2.1 AA contrast.
-- **NFR-8.2** Tap targets on phone are at least 44x44 points.
-- **NFR-8.3** Every item photo carries meaningful alternative text derived from the item's
-  name and tags.
+- **NFR-8.1** Text and interactive controls meet WCAG 2.1 AA contrast — 4.5:1 for body text,
+  3:1 for large text and UI boundaries. Every theme's token set is asserted against these
+  ratios by an automated test, so a later palette change cannot quietly break one. The
+  measured table is in `2026-11-04-wardrobe-ui-design.md` §5.2.
+- **NFR-8.2** Tap targets on phone are at least 44x44 points. **Visual size and hit area are
+  decoupled:** chips, tabs and switches are drawn at 24-30px by design, and each gets its
+  full hit area from padding or an overlay. This is a property of the shared components, not
+  of each place they are used.
+- **NFR-8.3** Every item photo carries meaningful alternative text, derived in this order:
+  the item's name if set, otherwise its derived name, followed by its Category and Colour
+  tags — "Linen shirt, a beige shirt".
 - **NFR-8.4** The app is fully operable by keyboard on desktop, and labelled for screen
   readers.
-- **NFR-8.5** Honours the device's light and dark appearance setting. The neutral ground
-  used by normalisation (FR-4.1) works in both appearances.
+- **NFR-8.5 Appearance.** Four themes ship. Each is a complete palette, two light-first and
+  two dark-first, and each supplies the `--cut` ground that FR-4.1's alpha cutouts are
+  composited onto.
+
+  The setting offers five options, and **"Match my device" is the default**: it follows
+  `prefers-color-scheme`, pairing one light theme with one dark one. Choosing a named theme
+  pins it in both appearances. This is how four themes and "honours the device's setting"
+  coexist. Palettes and pairings: `2026-11-04-wardrobe-ui-design.md` §2.1.
 - **NFR-8.6** Managing the vocabulary and the credential list is usable on a phone, not
   only on desktop — reordering credentials and editing a tag description included
   (FR-12.1).
