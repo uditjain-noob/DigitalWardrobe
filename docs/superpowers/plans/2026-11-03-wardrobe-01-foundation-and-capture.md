@@ -71,6 +71,10 @@ Input classes the spec implies that no obvious happy-path test would exercise. E
 
 Next.js 15 App Router with TypeScript strict mode, React 19, Tailwind for styling. Add Drizzle, pg-boss, sharp, heic-convert, zod, `@node-rs/argon2`, the two AWS SDK packages, Vitest. Pin **Node 22 LTS** in `.nvmrc` and the Dockerfile — sharp and heic-convert are native, so every image path runs on the Node runtime, never Edge.
 
+Build the image for **`linux/arm64` and `linux/amd64`**. The host recommended in the
+infrastructure doc §7.4 is ARM, and every native dependency here — sharp, argon2, Postgres —
+ships ARM64 builds, so this costs a `--platform` flag now and saves a rebuild later.
+
 `docker-compose.yml` defines Postgres 16 on 5432 and MinIO on 9000 with a `wardrobe` bucket. **This is the file production runs** (infrastructure doc §3), with MinIO standing in locally for Cloudflare R2 and Caddy added in front for TLS. Keep it deployable: no dev-only service that production would need a different topology to replace.
 
 - [ ] **Step 2: Write the failing test**

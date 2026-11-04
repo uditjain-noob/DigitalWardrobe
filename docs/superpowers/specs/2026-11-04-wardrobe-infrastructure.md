@@ -37,8 +37,9 @@ which, because they are the whole reason this is not "put it on Vercel".
 | **NFR-5.1** — backups with a restore procedure "exercised end-to-end" | Any arrangement where losing the database is unrecoverable. This is the one failure with no undo |
 
 A fifth, softer one: **NFR-3.6** redirects the browser straight to a signed storage URL, so
-image bytes never pass through the app. That makes **object-store egress the dominant
-bandwidth cost**, which is a real input to choosing the store.
+image bytes never pass through the app. That makes object-store egress the dominant bandwidth
+cost — which is why the store is R2 — and it has a second consequence that turns out to
+dominate the hosting choice entirely: the box serves JSON only. See §7.1.
 
 ---
 
@@ -50,13 +51,13 @@ bucket. There is no Redis, no separate image service, no second language.
 
 | Component | Choice | Why this one |
 |---|---|---|
-| **Runtime** | Node 22 LTS, Node runtime (not Edge) | sharp and heic-convert are native; Node 22 has prebuilt sharp binaries and native `fetch`. Pinned in `.nvmrc` and the Dockerfile |
+| **Runtime** | Node 22 LTS, Node runtime (not Edge) | sharp and heic-convert are native; Node 22 has prebuilt sharp binaries and native `fetch`. Pinned in `.nvmrc` and the Dockerfile. **Build the image for `linux/arm64` as well as `amd64`** — the recommended host in §7.4 is ARM, and every dependency here ships ARM64 builds |
 | **Web** | Next.js 15, one container | Already chosen in plan 1 |
 | **Worker** | A second container running the same image with a different entrypoint | NFR-1.5. Same image means one build, and the worker can import `src/features/*` directly |
 | **Database** | **Postgres 16 in a container on the same host**, on a named volume | Always-on and local: pg-boss polls constantly and holds a connection, which is exactly what serverless Postgres with autosuspend is worst at. Zero latency to the app, zero cost, and the same `docker-compose` service as local dev |
 | **Queue** | pg-boss on that Postgres | No second datastore to run or pay for. Plan 1 Task 11 already builds this |
 | **Object store** | **Cloudflare R2** | S3-compatible with presigned URLs, so plan 1 Task 8 works unchanged — and **no egress charges**, which matters precisely because NFR-3.6 sends every image byte straight from the store to the browser. A free allowance covers a personal wardrobe several times over |
-| **Host** | **One small VPS** (Hetzner CX22 class, 2 vCPU / 4 GB), Docker Compose | Dwarfs the load at personal scale. Runs a long-lived worker without ceremony. One box to reason about |
+| **Host** | **One small box**, Docker Compose — see §7 for the options and the recommendation (start on Oracle's free Mumbai tier, move to a ~€6 Hetzner CX23 if it irritates you) | Dwarfs the load at personal scale. Runs a long-lived worker without ceremony. One box to reason about |
 | **TLS / reverse proxy** | **Caddy**, in the same compose file | Automatic certificates and renewal with three lines of config. Satisfies NFR-4.1 without a cron job you have to remember |
 | **Email** | **Resend**, on your own domain | Volume is tiny — verification and password reset only. Needs DKIM on a domain you own, which you need anyway |
 | **Domain** | One, registered anywhere | Required for email deliverability and for the app itself |
@@ -64,7 +65,7 @@ bucket. There is no Redis, no separate image service, no second language.
 | **Deploys** | GitHub Actions → build and push image → SSH to the host → `docker compose up -d` | No platform coupling. The same compose file runs locally |
 | **Backups** | Nightly `pg_dump` plus an R2 object sync, to a **separate** bucket, with a rehearsed restore | NFR-5.1. See section 6 |
 
-### Why a VPS rather than a platform
+### Why one box rather than a platform
 
 The honest trade. A platform (Railway, Render, Fly) removes sysadmin work and costs roughly
 two to four times as much at this size; a VPS costs the price of a coffee per month and hands
@@ -173,24 +174,128 @@ tag; majors deliberately, with a dump taken first.
 
 ---
 
-## 7. Approximate cost
+## 7. Hosting options and what they actually cost
 
-Verify current prices before committing — these move, and the point of the table is the shape,
-not the arithmetic.
+Prices verified **4 November 2026** against the sources at the foot of this section. They move
+— Hetzner alone raised its cheap tiers twice in 2026 — so re-check before committing.
 
-| | Monthly |
+### 7.1 The finding that changes the choice
+
+The obvious assumption is that the server should sit near you. It matters less than it looks,
+because of NFR-3.6: **image bytes never pass through the app.** The browser is redirected
+straight to a signed R2 URL, and R2 is served from Cloudflare's edge, which is fast from
+almost anywhere.
+
+So the box serves **JSON only** — item lists, filters, tags. A grid load is one API call
+followed by images from the edge. That means a server 150 ms away costs you 150 ms *once per
+screen*, not once per photograph, and the heavy part of the page is unaffected either way.
+
+Which makes the cheapest box genuinely competitive with the nearest box, and turns the
+decision into a question about money and trust rather than geography.
+
+### 7.2 What binds, and what does not
+
+Worth knowing before reading prices: **storage is not the constraint.** At roughly 2.3 MB per
+piece across all five stored versions — original, display, thumbnail, cutout, cutout thumbnail
+— the numbers are:
+
+| Wardrobe | Stored | R2's 10 GB free tier |
+|---|---|---|
+| 200 pieces | 0.4 GB | 4% used |
+| 1,000 pieces (the spec's cap) | 2.2 GB | 22% used |
+| 2,000 pieces | 4.4 GB | 44% used |
+
+Operations are not close either: a first session digitising 1,000 pieces is ~5,000 writes
+against a million free, and a month of ordinary browsing is a few thousand reads against ten
+million free.
+
+**So object storage is free, and email is free.** The entire bill is the box.
+
+### 7.3 The options
+
+Grouped by what you are optimising for. The app needs ~2 GB of RAM to be comfortable —
+Postgres, Node, and sharp, which spikes while decoding a large photograph.
+
+**Free**
+
+| Option | Spec | Region | Cost | The catch |
+|---|---|---|---|---|
+| **Oracle Cloud Always Free** | 2 OCPU / 12 GB ARM, 200 GB block storage | Mumbai, Hyderabad | **₹0 / $0, no expiry** | Halved in June 2026 from 4 OCPU / 24 GB, so it can be cut again. Oracle has a history of reclaiming idle free instances. ARM64 only — fine here, since sharp, Postgres and Node all ship ARM64 builds. No SLA, and account approval is sometimes awkward |
+
+**Cheapest paid**
+
+| Option | Spec | Region | Cost |
+|---|---|---|---|
+| **Hetzner CX23** | 2 vCPU / 4 GB / 40 GB | Germany, Finland only | **€5.49–5.99/mo** (~$6–7) |
+| Hetzner CPX11 (US) | 2 vCPU / 2 GB | Ashburn, Hillsboro | $20.49/mo — the cheap tiers are EU-only |
+
+Hetzner is the best price per GB by a wide margin, with two caveats: **the cheap CX and CAX
+lines have had recurring capacity constraints in 2026** and have sometimes shown as
+unavailable, and there is no India region.
+
+**Low latency, paid**
+
+| Option | Spec | Region | Cost | Measured latency |
+|---|---|---|---|---|
+| **Vultr** | 1 vCPU / 2 GB / 55 GB | Mumbai | **$10/mo** | 3.6 ms |
+| Vultr | 2 vCPU / 4 GB / 80 GB | Mumbai | $20/mo | 3.6 ms |
+| Linode / Akamai | 1 vCPU / 2 GB / 50 GB | Mumbai, Chennai | $12/mo | 3.6 ms |
+| Linode / Akamai | 2 vCPU / 4 GB / 80 GB | Mumbai, Chennai | $24/mo | 3.6 ms |
+| DigitalOcean | 2 vCPU / 4 GB | Bangalore | $24/mo | 17 ms |
+| AWS Lightsail | 2 vCPU / 512 MB | Mumbai | $5/mo | 2 ms — too little memory for this stack |
+
+**Platforms, for comparison**
+
+| Option | Realistic monthly | Why it is not the recommendation |
+|---|---|---|
+| Railway | $10–15 (web + Postgres + worker) | Cheapest platform, and still two to three times a Hetzner box |
+| Fly.io | $17–22, or ~$5 running your own Postgres on a volume | Managed Postgres is $38/mo on its own |
+| Render | $21–34 | Managed Postgres $38/mo; highest baseline of the three |
+| Vercel | n/a | Cannot host the worker NFR-1.5 requires — section 4 |
+
+### 7.4 The recommendation
+
+**Start on Oracle Cloud Always Free, Mumbai.** It is free forever, 12 GB of RAM is six times
+what this needs, it is 3 ms away, and ARM64 costs nothing because every dependency has ARM
+builds.
+
+The reason this is safe rather than reckless is section 6. The backup discipline — nightly
+`pg_dump` and an object sync to a separate bucket, with a rehearsed restore — means that if
+Oracle reclaims the instance or halves the tier again, **you lose an afternoon, not a
+wardrobe.** Without that discipline the free tier would be a bad idea; with it, the risk is
+bounded and the price is zero.
+
+**Then, if Oracle irritates you** — and it is the sort of thing that does — move to **Hetzner
+CX23 at about €6/month**. That move is `docker compose up -d` on a new box plus a DNS change,
+because of the decision in §3 that production runs the same compose file as dev. Budget an
+evening.
+
+**If you would rather pay from the start and not think about it**, Vultr Mumbai at $10/month
+for 2 GB is the straightest answer: real support, 3.6 ms, no free-tier politics.
+
+| | Monthly, all in |
 |---|---|
-| VPS, 2 vCPU / 4 GB | ~€4–6 |
-| Cloudflare R2 | ~€0 within the free allowance at personal scale; no egress charge at any size |
-| Resend | ~€0 on the free tier at this volume |
-| Domain | ~€1 amortised |
-| **Total** | **~€5–7 per month** |
+| Oracle free + R2 + Resend + domain | **~₹90 / ~$1** (the domain, amortised) |
+| Hetzner CX23 + R2 + Resend + domain | **~₹620 / ~$7** |
+| Vultr Mumbai 2 GB + R2 + Resend + domain | **~₹970 / ~$11** |
 
-Plus the one cost that is **not yours**: every AI call runs on the user's own provider
-credential (FR-3.1, NFR-7.1), so matting and autofill never appear on this bill — including
-your own, which lands on whichever key you add to your own account.
+INR figures are rough conversions for orientation only. Providers billing into India may add
+18% GST at checkout — check the total there rather than trusting the list price.
 
----
+And the cost that is **not** yours at any tier: every AI call runs on the user's own provider
+credential (FR-3.1, NFR-7.1), so matting and autofill never appear on this bill. They appear on
+whichever key you add to your own account — which, for your own wardrobe, is the one spend
+worth watching. A 1,000-piece first session is 1,000 matting calls.
+
+### 7.5 Sources
+
+- [Hetzner Cloud pricing, all current prices](https://cloudtally.eu/hetzner-cloud-prices) · [Hetzner 2026 price increases and alternatives](https://northflank.com/blog/hetzner-cloud-server-price-increases) · [CX23 pricing and what is orderable](https://www.cloudhim.com/pricing-costs/hetzner-cx22-pricing-2026)
+- [Oracle quietly cuts free-tier Ampere A1 in half](https://linuxiac.com/oracle-quietly-cuts-free-tier-ampere-a1-resources-in-half/) · [Oracle Always Free 2026 limits](https://site2us.com/en/servers/oracle-cloud-free-tier)
+- [Cheapest VPS for India 2026, prices verified and latency measured](https://dev.to/karthik_yk/cheapest-vps-for-india-in-2026-i-verified-every-price-and-measured-the-latency-19b6)
+- [Linode / Akamai shared-CPU pricing](https://bestusavps.com/reviews/linode/) · [Vultr vs Linode plan breakdown](https://github.com/dgifelp/vultr-linode-comparison) · [DigitalOcean droplet pricing 2026](https://vpsproof.com/blog/digitalocean-pricing)
+- [Railway vs Render vs Fly.io pricing, hobby plans and Postgres](https://pethost.dev/blog/railway-vs-render-vs-fly-io-pricing/)
+- [Cloudflare R2 free tier and pricing](https://nayankyada.com/blog/cloudflare-r2-pricing-2026-free-tier-limits-egress-costs-when-to-upgrade)
+- [Resend pricing and free-tier limits](https://sendfox.com/compare/resend-pricing)
 
 ## 8. Changes to the other documents
 
