@@ -848,8 +848,12 @@ outfit cover photo is the seam Phase 2 builds on.
 
 ### Left to the builder
 
-- Language, framework, database, hosting provider, image storage mechanism, job runner,
-  and transactional email provider.
+- ~~Language, framework, database, hosting provider, image storage mechanism, job runner,
+  and transactional email provider.~~ **Decided 2026-11-04** — libraries in plan 1, and the
+  operated infrastructure in `2026-11-04-wardrobe-infrastructure.md`: Node 22 and Postgres 16
+  in containers on one small VPS, Cloudflare R2 for objects, pg-boss on that Postgres, Resend
+  for email. Every one of those is reachable only through an interface the plans define, so
+  each remains swappable.
 - **Which providers populate the enumeration at launch**, subject to the hard constraints
   that at least one offers matting good enough against NFR-3.9's awkward sample, that
   generative editing is not used for normalisation (FR-4.2), and that one credential can be

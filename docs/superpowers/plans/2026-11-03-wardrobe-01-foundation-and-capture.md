@@ -9,6 +9,7 @@
 **Tech Stack:** TypeScript (strict), Next.js 15 (App Router), React 19, Postgres 16, Drizzle ORM + drizzle-kit, pg-boss (Postgres-backed job queue — no Redis), sharp + heic-convert, `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` (S3-compatible; MinIO locally), `@node-rs/argon2`, zod, Resend (mail), Vitest, Docker Compose for Postgres + MinIO in dev and test.
 
 **Spec:** [docs/superpowers/specs/2026-11-03-digital-wardrobe-design.md](../specs/2026-11-03-digital-wardrobe-design.md)
+**Infrastructure:** [docs/superpowers/specs/2026-11-04-wardrobe-infrastructure.md](../specs/2026-11-04-wardrobe-infrastructure.md) — Node 22 and Postgres 16 in containers on one VPS, Cloudflare R2, pg-boss, Resend, Caddy. The dev compose file this plan builds is the one production runs.
 **UI design:** [docs/superpowers/specs/2026-11-04-wardrobe-ui-design.md](../specs/2026-11-04-wardrobe-ui-design.md) — the palettes, type roles, geometry and every screen this plan builds. Task 14 lands the token system; every UI task after it draws from there.
 
 **Scope:** Spec sections 6.1, 6.2, 6.12, and the parts of section 7 those need. Deliberately **not** here: tag types and tags (6.5), filtering and search (6.7), item editing/archiving (6.8), provider credentials (6.3), normalisation (6.4), autofill (6.6), outfits (6.9–6.11). Those are plans 2–4.
@@ -68,7 +69,13 @@ Input classes the spec implies that no obvious happy-path test would exercise. E
 
 - [ ] **Step 1: Scaffold the project**
 
-Next.js 15 App Router with TypeScript strict mode, React 19, Tailwind for styling. Add Drizzle, pg-boss, sharp, heic-convert, zod, `@node-rs/argon2`, the two AWS SDK packages, Vitest. `docker-compose.yml` defines Postgres 16 on 5432 and MinIO on 9000 with a `wardrobe` bucket.
+Next.js 15 App Router with TypeScript strict mode, React 19, Tailwind for styling. Add Drizzle, pg-boss, sharp, heic-convert, zod, `@node-rs/argon2`, the two AWS SDK packages, Vitest. Pin **Node 22 LTS** in `.nvmrc` and the Dockerfile — sharp and heic-convert are native, so every image path runs on the Node runtime, never Edge.
+
+Build the image for **`linux/arm64` and `linux/amd64`**. The host recommended in the
+infrastructure doc §7.4 is ARM, and every native dependency here — sharp, argon2, Postgres —
+ships ARM64 builds, so this costs a `--platform` flag now and saves a rebuild later.
+
+`docker-compose.yml` defines Postgres 16 on 5432 and MinIO on 9000 with a `wardrobe` bucket. **This is the file production runs** (infrastructure doc §3), with MinIO standing in locally for Cloudflare R2 and Caddy added in front for TLS. Keep it deployable: no dev-only service that production would need a different topology to replace.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1163,19 +1170,57 @@ Inserts rows and small objects directly, skipping the HTTP path, so seeding 1,00
 Run: `npm test -- tests/perf/gates.test.ts`
 Expected: PASS, 2 tests.
 
-- [ ] **Step 5: Deploy the web process and the worker**
+- [ ] **Step 5: Deploy — four containers on one host**
 
-Managed Postgres, S3-compatible bucket, HTTPS enforced (NFR-4.1), the worker as a second process (NFR-1.5). Record the URLs and env in `README.md`.
+The host is provisioned separately and first — see
+[runbook 01](../../runbooks/01-provision-the-host.md), which ends exactly where this step
+begins: an ARM box with Docker, a reserved IP, and ports 80 and 443 open at both firewall
+layers.
 
-- [ ] **Step 6: Measure NFR-2.1, 2.2, and 2.4 against the deployment by hand**
+Per the infrastructure doc §3: that host runs `web`, `worker`, `postgres` and `caddy` from the
+same compose file as dev, with Cloudflare R2 replacing MinIO and Resend wired for mail. Caddy
+terminates TLS and enforces HTTPS (NFR-4.1). The worker is a separate container running the
+same image with the worker entrypoint (NFR-1.5).
+
+Secrets live in a `.env` on the host at mode 600, never in git. Generate
+`SECRET_ENCRYPTION_KEY` as 32 random bytes base64 now even though plan 3 is what uses it, and
+**keep a copy somewhere that is not the server and not this repository** — losing it makes
+every stored provider credential permanently undecryptable.
+
+Deploy path: GitHub Actions builds and pushes the image, then over SSH runs
+`docker compose up -d`. Record the host, the domain, the buckets and every env var in
+`README.md`.
+
+- [ ] **Step 6: Set up backups, then prove the restore — NFR-5.1**
+
+A nightly container runs `pg_dump --format=custom` and uploads to a **separate R2 bucket** from
+the one holding photographs; objects sync to that same backup bucket. Seven daily, four weekly.
+
+Then do the drill: restore the dump to a throwaway database and bucket, point a local app at
+it, and confirm items, photos and accounts all come back. **Record how long it took** in
+`docs/superpowers/plans/notes/01-launch-gates.md`.
+
+NFR-5.1 says the procedure must be "exercised", and that word is the requirement. Containerised
+Postgres is the right call at this scale precisely *because* this step is cheap — but it is the
+step that makes the call defensible, so it happens before anyone else has an account.
+
+- [ ] **Step 7: Measure NFR-2.1, 2.2, and 2.4 against the deployment by hand**
 
 Seed 1,000 items, then on a throttled phone-profile connection record: cold and warm grid render (NFR-2.1 — 3s and 1s), and a page fetch (NFR-2.2 — 300ms). NFR-2.4 belongs to plan 3's provider work; note the current render-job latency as a baseline. Write the numbers into `docs/superpowers/plans/notes/01-launch-gates.md` with the date and the device. These need a real browser and a real network, which is why they are a measurement step and not a test.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Add the health endpoint and one uptime check — NFR-7.6**
+
+`/api/health` checks database and bucket reachability and returns a plain object. One external
+uptime check against it. The author-only metrics page — total storage, queue depth,
+per-provider error rate, signup count, and disk free on the box — lands in plan 3, once there
+are providers to have error rates. Disk is on the list because Postgres and the image cache
+share it.
+
+- [ ] **Step 9: Commit**
 
 ```bash
 git add -A
-git commit -m "chore: deploy, seed script, and recorded launch-gate measurements"
+git commit -m "chore: deploy to one host, backups with a rehearsed restore, health check"
 ```
 
 ---
