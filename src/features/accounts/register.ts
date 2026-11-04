@@ -66,7 +66,9 @@ export type RegisterAccountError =
  */
 export async function registerAccount(
   input: RegisterAccountInput,
-): Promise<Result<{ userId: string }, RegisterAccountError>> {
+): Promise<
+  Result<{ userId: string; emailDelivered: boolean }, RegisterAccountError>
+> {
   const { allowed } = await consumeRateLimit(
     `signup:${input.ip}`,
     SIGNUP_RATE_LIMIT,
@@ -102,6 +104,18 @@ export async function registerAccount(
 
   const token = await issueVerificationToken(userId);
 
+  // Email delivery is best-effort here: the account and its verification
+  // token already exist, so a provider outage must not fail signup, and the
+  // mailer's internal error string (e.g. `ResendMailer`'s
+  // "Failed to send email to {domain} (status {status})") must never reach
+  // a user (NFR-5.8) — `RegisterAccountError` deliberately has no slot for
+  // it. But swallowing the failure silently would leave the caller with no
+  // way to tell this case apart from the happy path, so someone would wait
+  // for an email that never arrives (the exact failure shape NFR-5.8 exists
+  // to prevent). `emailDelivered` signals that out of band, alongside the
+  // success value rather than through the error union, so the API route
+  // can redirect the user to a plain-language notice instead of silence.
+  let emailDelivered = true;
   try {
     await getMailer().send({
       to: input.email,
@@ -109,16 +123,10 @@ export async function registerAccount(
       text: `Confirm your email address: ${verificationLink(token)}\n\nThis link expires in 24 hours.`,
     });
   } catch {
-    // Email delivery is best-effort here: the account and its verification
-    // token already exist, so a provider outage must not fail signup or
-    // surface the mailer's internal error (NFR-5.8) — it isn't fit for a
-    // user to read, and there is nowhere in this function's Result type to
-    // put a distinct "email failed" outcome even if it were. The user can
-    // always ask for the email again later (a resend flow is a later
-    // task's concern, not this one's).
+    emailDelivered = false;
   }
 
-  return ok({ userId });
+  return ok({ userId, emailDelivered });
 }
 
 function verificationLink(token: string): string {

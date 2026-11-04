@@ -43,5 +43,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { token, expiresAt } = await createSession(result.value.userId);
   await setSessionCookie(token, expiresAt);
 
-  return NextResponse.redirect(new URL("/", request.url), { status: 303 });
+  // The account exists either way. If the verification email itself failed
+  // to send, say so in plain language (NFR-5.8) instead of leaving the
+  // person to wonder why nothing arrived — `?mail=pending` carries no
+  // detail about why, only that a follow-up may be needed.
+  const destination = result.value.emailDelivered ? "/" : "/signup?mail=pending";
+
+  return NextResponse.redirect(new URL(destination, request.url), {
+    status: 303,
+  });
 }

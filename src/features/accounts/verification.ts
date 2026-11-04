@@ -33,11 +33,15 @@ export async function issueVerificationToken(userId: string): Promise<string> {
 
 /**
  * Consumes a verification token: marks it used and marks the owning user's
- * email verified, atomically. An unknown token, an expired token, an
- * already-used token, and a token issued for a different purpose (e.g.
- * `'reset'`) are all rejected with the exact same `'invalid'` — deliberately
- * indistinguishable, so a caller (and an attacker probing responses) can
- * never learn which case occurred.
+ * email verified, atomically — both statements run inside one
+ * `db.transaction`, so a crash or dropped connection between them cannot
+ * leave the token spent while the user stays unverified (which would
+ * permanently strand the account: the token is single-use, and signup
+ * would still refuse a retry with `email_taken`). An unknown token, an
+ * expired token, an already-used token, and a token issued for a different
+ * purpose (e.g. `'reset'`) are all rejected with the exact same `'invalid'`
+ * — deliberately indistinguishable, so a caller (and an attacker probing
+ * responses) can never learn which case occurred.
  *
  * The "mark used" and "is it still usable" check happen in one conditional
  * `UPDATE ... WHERE usedAt IS NULL ...`, not a read followed by a write, so
@@ -48,27 +52,29 @@ export async function consumeVerificationToken(
 ): Promise<Result<{ userId: string }, "invalid">> {
   const id = hashToken(token);
 
-  const [row] = await db
-    .update(emailTokens)
-    .set({ usedAt: new Date() })
-    .where(
-      and(
-        eq(emailTokens.id, id),
-        eq(emailTokens.purpose, "verify"),
-        isNull(emailTokens.usedAt),
-        gt(emailTokens.expiresAt, new Date()),
-      ),
-    )
-    .returning({ userId: emailTokens.userId });
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(emailTokens)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(emailTokens.id, id),
+          eq(emailTokens.purpose, "verify"),
+          isNull(emailTokens.usedAt),
+          gt(emailTokens.expiresAt, new Date()),
+        ),
+      )
+      .returning({ userId: emailTokens.userId });
 
-  if (!row) {
-    return err("invalid");
-  }
+    if (!row) {
+      return err("invalid");
+    }
 
-  await db
-    .update(users)
-    .set({ emailVerifiedAt: new Date() })
-    .where(eq(users.id, row.userId));
+    await tx
+      .update(users)
+      .set({ emailVerifiedAt: new Date() })
+      .where(eq(users.id, row.userId));
 
-  return ok({ userId: row.userId });
+    return ok({ userId: row.userId });
+  });
 }

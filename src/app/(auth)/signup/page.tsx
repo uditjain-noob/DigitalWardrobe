@@ -38,7 +38,13 @@ const buttonStyle: CSSProperties = {
  * without awaiting the async `searchParams` prop Next 15 passes to the page
  * itself.
  */
-export function SignupForm({ errorCode }: { errorCode?: string }) {
+export function SignupForm({
+  errorCode,
+  mailPending,
+}: {
+  errorCode?: string;
+  mailPending?: boolean;
+}) {
   const message = errorCode
     ? ERROR_MESSAGES[errorCode] ?? "Something went wrong. Please try again."
     : null;
@@ -52,6 +58,16 @@ export function SignupForm({ errorCode }: { errorCode?: string }) {
       {message && (
         <p role="alert" style={{ color: "#b00020", marginBottom: "1rem" }}>
           {message}
+        </p>
+      )}
+
+      {mailPending && (
+        // Not an error — the account was created and the person is signed
+        // in. Only the verification email itself failed to send, so this is
+        // a plain-language notice (NFR-5.8), not an alert.
+        <p role="status" style={{ color: "#1a1a1a", marginBottom: "1rem" }}>
+          Account created. If the verification email does not arrive in a
+          few minutes, you can request another.
         </p>
       )}
 
@@ -105,8 +121,8 @@ export function SignupForm({ errorCode }: { errorCode?: string }) {
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; mail?: string }>;
 }) {
-  const { error } = await searchParams;
-  return <SignupForm errorCode={error} />;
+  const { error, mail } = await searchParams;
+  return <SignupForm errorCode={error} mailPending={mail === "pending"} />;
 }

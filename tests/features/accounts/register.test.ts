@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { db } from "../../../src/db";
 import { users } from "../../../src/db/schema";
@@ -160,6 +160,35 @@ describe("registerAccount", () => {
       .where(eq(users.email, "secure@b.com"));
 
     expect(user.passwordHash).not.toContain("a-good-long-password");
+  });
+
+  it("signals a failed verification email out of band, without leaking why", async () => {
+    const sendSpy = vi
+      .spyOn(mailer, "send")
+      .mockRejectedValueOnce(new Error("Failed to send email to b.com (status 500)"));
+
+    const r = await registerAccount({
+      email: "mailfail@b.com",
+      password: "a-good-long-password",
+      ip: "8.8.8.8",
+    });
+
+    sendSpy.mockRestore();
+
+    // The account still exists — a mailer outage must not fail signup —
+    // but the caller can tell the email didn't go out, via a field outside
+    // `RegisterAccountError` (not an "email_failed" error code, and no
+    // trace of the mailer's own message anywhere in the result).
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.value.emailDelivered).toBe(false);
+    expect(JSON.stringify(r)).not.toContain("status 500");
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, "mailfail@b.com"));
+    expect(user).toBeDefined();
+    expect(user.emailVerifiedAt).toBeNull();
   });
 
   it("the signup page links to the privacy statement", () => {
