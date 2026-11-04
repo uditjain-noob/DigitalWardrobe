@@ -1172,7 +1172,12 @@ Expected: PASS, 2 tests.
 
 - [ ] **Step 5: Deploy — four containers on one host**
 
-Per the infrastructure doc §3: a VPS running `web`, `worker`, `postgres` and `caddy` from the
+The host is provisioned separately and first — see
+[runbook 01](../../runbooks/01-provision-the-host.md), which ends exactly where this step
+begins: an ARM box with Docker, a reserved IP, and ports 80 and 443 open at both firewall
+layers.
+
+Per the infrastructure doc §3: that host runs `web`, `worker`, `postgres` and `caddy` from the
 same compose file as dev, with Cloudflare R2 replacing MinIO and Resend wired for mail. Caddy
 terminates TLS and enforces HTTPS (NFR-4.1). The worker is a separate container running the
 same image with the worker entrypoint (NFR-1.5).
